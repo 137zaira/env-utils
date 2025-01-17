@@ -1,0 +1,73 @@
+#!/bin/bash
+args=()
+for arg in "$@"; do
+    if [[ -f "$arg" ]]; then
+        args+=("$1")
+        continue
+    fi
+    if [[ "$arg" =~ ^\/ ]]; then
+        echo "file: '$arg' not found, skipping"
+        continue
+    fi
+    # if not starts with /
+    if [[ $sys = l ]]; then
+        if [[ $arg = apt || $arg = src || $arg =~ ^source[s]? ]]; then
+            args+=("/etc/apt/sources.list")
+            continue
+        fi
+        if [[ $arg = grub ]]; then
+            echo -e "after editing, run:\nupdate-grub"
+            args+=("/etc/default/$arg")
+            continue
+        fi
+        if [[ $arg = stab ]]; then
+            args+=("/etc/fstab")
+            continue
+        fi
+        # if on linux
+        if [[ -f "/etc/$arg" ]]; then
+            args+=("/etc/$arg")
+            continue
+        fi
+        if [[ -f "/etc/default/$arg" ]]; then
+            args+=("/etc/default/$arg")
+            continue
+        fi
+        if [[ -f "$_sl/$arg" ]]; then
+            args+=("$_sl/$arg")
+            continue
+        fi
+        if [[ -f "$_one/$arg" ]]; then
+            args+=("$_one/$arg")
+            continue
+        fi
+        if [[ -f "$_one/util/$arg" ]]; then
+            args+=("$_one/util/$arg")
+            continue
+        fi
+        if [[ -f "$_one/dat/$arg" ]]; then
+            args+=("$_one/dat/$arg")
+            continue
+        fi
+    else
+        echo "Windows e_ is incomplete"
+        # if on windows
+        if [[ -f "$_sw/$arg" ]]; then
+            args+=("$_sw/$arg")
+            continue
+        fi
+    fi
+    if [[ "$arg" =~ ^fir ]]; then
+        cd "/_/cj/fire"
+        co .
+        continue
+    fi
+    args+=("$1")
+done
+echo "args: ${args[@]}"
+
+if [[ $USER = root ]]; then
+    sudo -u z codium "${args[@]}"
+else
+    codium "${args[@]}"
+fi

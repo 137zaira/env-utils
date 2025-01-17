@@ -1,0 +1,370 @@
+#!/bin/bash
+# . "/_/u/s/arc/functions/common"
+
+$r_ _ sql iter_complex
+
+[[ -z "$log_dir" ]] && {
+    export log_dir="/_/files/dat/logs"
+}
+
+chexit() {
+    missing_args=()
+    for arg in "${required[@]}"; do
+        #  && "${#arg}" -eq 0
+        if [[ -z "${!arg}" ]]; then
+            # echo "arg: $arg"
+            # echo "!arg: ${!arg}"
+            # echo "#arg: ${#arg}"
+            missing_args+=("$arg")
+        fi
+    done
+    if [[ "${#missing_args[@]}" -gt 0 ]]; then
+        if [[ "${#missing_args[@]}" -gt 1 ]]; then
+            echo "missing_args: ${missing_args[@]}"
+        else
+            echo "missing_arg: ${missing_args[@]}"
+        fi
+        exit 1
+    fi
+    echo "vars setup checked"
+    return
+}
+
+clear_logs_and_set_vars() {
+    [[ ! -d "$log_dir" ]] && {
+        mkdir -p "$log_dir"
+    }
+    >"$log_dir/col"
+    >"$log_dir/no_vid_dirs"
+    >"$log_dir/empty_dirs"
+    >"$log_dir/deleted"
+    export checked_file_count=0
+    export other_file_count=0
+    export files_found_at_same=0
+    export files_updated_path=0
+    export inserted_file_count=0
+    export files_deleted=0
+}
+
+init_run() {
+    echo "check_vars"
+    if [[ $arc_fn = "main" ]]; then
+        required=(location db_file db_table log_dir)
+        chexit
+        echo "check_init_db_table -lt locations"
+        output=$(check_init_db_table -lt locations)
+        output=$(count_q -t locations -i "table_name = '$db_table'")
+        if [[ $output -eq 0 ]]; then
+            output=(insert_q -t locations -w "table_name, location" -v "'$table', '$location'")
+        fi
+    fi
+    if [[ $arc_fn = "alt" ]]; then
+        required=(location db_file db_table log_dir)
+        chexit
+    fi
+    if [[ $arc_fn = "shelf" ]]; then
+        required=(db_file db_table existing_dir unique_dir log_dir)
+        chexit
+    fi
+    if [[ $arc_fn = "del" ]]; then
+        # main_root_path
+        required=(db_file db_table location log_dir primary_tables extensions)
+        chexit
+    fi
+
+    echo "check_init_db_table"
+    output=$(check_init_db_table)
+    error=$?
+    [[ $error -gt 0 ]] && {
+        ec "check_init_db_table error: $error, $output"
+        return $error
+    }
+
+    # echo "unify_table: $unify_table"
+    # if [[ -n "$unify_table" ]]; then
+    #     echo "check_init_db_table -ut $unify_table"
+    #     output=$(check_init_db_table -ut "$unify_table")
+    #     error=$?
+    #     [[ $error -gt 0 ]] && {
+    #         ec "check_init_db_table -t '$unify_table' error: $error, $output"
+    #         return $error
+    #     }
+    #     echo "update_q -t \"$unify_table\" -s "flip_bit = '0'" -i _"
+    #     update_q -t "$unify_table" -s "flip_bit = '0'" -i _
+    #     error=$?
+    #     [[ $error -gt 0 ]] && {
+    #         ec "update_q -t '$unify_table' error: $error, $output"
+    #         return $error
+    #     }
+    # fi
+
+    echo "update_q -s "flip_bit = '0'" -i _"
+    update_q -s "flip_bit = '0'" -i _
+
+    echo "clear_logs_and_set_vars"
+    clear_logs_and_set_vars
+
+    return 0
+}
+
+# check if path present, if present get sha from db else create shasum
+# sets sha, in_db=1/0, at_path=1/0
+lookup_or_sha() {
+    # echo "lookup_or_sha"
+
+    get_sha_if_at_path() {
+        [[ 0 -eq 1 ]]
+    }
+    # echo "lookup_or_sha \$@: $@, file_subpath: '$file_subpath"
+
+    local OPTIND
+    while getopts 'g' OPTION; do
+        case "$OPTION" in
+        g)
+            get_sha_if_at_path() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    # shift "$(($OPTIND - 1))"
+    # echo "count_at_path_on_shelf@ '$file_subpath'"
+    local count_at_path_on_shelf=$(count_q -i "file_subpath = '$file_subpath'")
+    error=$?
+    [[ $error -ne 0 ]] && {
+        ec_err "count_at_path count_q error: $error, $count_at_path_on_shelf"
+        return $error
+    }
+    # echo "count_at_path_on_shelf: $count_at_path_on_shelf"
+    if [[ $count_at_path_on_shelf -gt 0 ]]; then
+        sha=$(select_q -w "sha2" -i "file_subpath = '$file_subpath'")
+        error=$?
+        [[ $error -ne 0 ]] && {
+            ec_err "select_q get sha2 error: $error, $sha"
+            return $error
+        }
+        # echo "_sha_: $sha"
+        in_db=1
+        at_path=1
+        return
+    fi
+    # echo "get_sha_if_at_path..."
+    get_sha_if_at_path && {
+        echo "path not found, si \"$file_path\""
+        sha=$(si "$file_path")
+        at_path=0
+        count_in_shelf=$(count_q -i "sha2 = '$sha'")
+        if [[ $count_in_shelf -gt 0 ]]; then
+            in_db=1
+        else
+            in_db=0
+        fi
+    }
+}
+
+dir_before_fn() {
+    local extra_args=""
+    local OPTIND
+    while getopts 'ne:' OPTION; do
+        case "$OPTION" in
+        n)
+            dry() {
+                [[ 1 -eq 1 ]]
+            }
+            extra_args="-n $extra_args"
+            ;;
+        e)
+            # verbose() {
+            #     [[ 1 -eq 1 ]]
+            # }
+            errata=$OPTARG
+            extra_args="-e $errata $extra_args"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    ((dir_count++))
+    dir_file_count=0
+    # fix_cur_dir
+}
+
+dir_after_fn() {
+    local errata=5
+    local extra_args=""
+    local OPTIND
+    while getopts 'ne:' OPTION; do
+        case "$OPTION" in
+        n)
+            dry() {
+                [[ 1 -eq 1 ]]
+            }
+            extra_args="-n $extra_args"
+            ;;
+        e)
+            # verbose() {
+            #     [[ 1 -eq 1 ]]
+            # }
+            errata="$OPTARG"
+            extra_args="-e $errata $extra_args"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    local cur_dir="$1"
+    # echo "dir_after_fn \$1: $cur_dir"
+
+    [[ $errata -gt 7 ]] && {
+        ec "dir_after: \"$cur_dir\""
+    }
+
+    shopt -s nullglob
+    shopt -s extglob
+    if [[ ! "$cur_dir" =~ .*_new$ ]]; then
+        cd "$cur_dir"
+        dir_files=(*)
+        # echo "dir_arg #files: ${#dir_files[@]}"
+        dir_count="${#dir_files[@]}|$(ls -l "$cur_dir" | grep - | wc -l)"
+        if [[ $dir_count = "0|0" ]]; then
+            # fixed=0
+            # alter_all_w_dir "$cur_dir"
+            # if [[ $fixed -eq 0 ]]; then
+            cd ..
+            rm -r "$cur_dir"
+            # fi
+        else
+            if [[ $dir_file_count -eq 0 && $dir_subdir_count -eq 0 ]]; then
+                echo "$cur_dir" >>"$log_dir/no_vid_dirs"
+            fi
+        fi
+    fi
+
+    # if [[ "$cur_depth" -eq 0 ]]; then
+    #     flip_dirs "$last_dir"
+    # fi
+    # last_dir="$1"
+}
+
+mv_deleted() {
+    ec1 "mv_deleted"
+    i=0
+    while read -r line || [[ -n "$line" ]]; do
+        ((vid_count++))
+        deserialize_to_arr "$line"
+        echo "resort_location: $resort_location"
+        echo "t_arr: ${t_arr[@]}"
+        path="${t_arr[2]}"
+        echo "path: ${path}"
+        # sub_dir="${path##$location}"
+        [[ ! -d "$location/resort/deleted" ]] && {
+            mkdir -p "$location/resort/deleted"
+        }
+        mv "$path" "$location/resort/deleted"
+        ((i++))
+    done <"$log_dir/deleted"
+    echo "moved to $location/resort/deleted i: $i"
+}
+
+################ <location_clean> ################
+clean_file_fn() {
+    # remove_quotes "$1"
+    if [[ "$1" == *\'* ]]; then
+        ((quoth++))
+        file_path="$1"
+        escaped=$(echo "$file_path" | sed "s/'/\'/g")
+        stripped=$(echo "$file_path" | sed "s/'//g")
+        if [[ ! "$escaped" = "$stripped" ]]; then
+            echo "mv \"$escaped\" \"$stripped\""
+            mv "$escaped" "$stripped"
+            ((quotes_removed_files_count++))
+        fi
+        return
+    fi
+    file_name="${file_path##*\/}"
+    if [[ "$file_name" =~ ^RARBG\.txt$|Downloaded\ from\ .*\.txt$|\.DS_Store$ ]]; then
+        echo "rm \"$file_path\""
+        rm "$file_path"
+        ((etc_file_removal_count++))
+    fi
+}
+
+clean_dir_before_fn() {
+    shopt -s globstar
+    for f in "$1"/._*; do
+        if [[ -f "$f" ]]; then
+            if [[ $(stat -c%s "$f") -lt $max_cleaner_size ]]; then
+                # echo "rm ._*: '$f'"
+                ((underscore_file_removal_count++))
+                rm "$f"
+            fi
+        elif [[ -d "$f" && "$file_name" =~ ^\._Snapshots$|^\._Thumbnails$|^\._Videos$ ]]; then
+            ((underscore_dir_removal_count++))
+            rm -r "$f"
+        fi
+    done
+    if [[ "$1" == *\'* ]]; then
+        dir_path="$1"
+        escaped=$(echo "$dir_path" | sed "s/'/\'/g")
+        stripped=$(echo "$dir_path" | sed "s/'//g")
+        if [[ ! "$escaped" = "$stripped" ]]; then
+            echo "mv \"$escaped\" \"$stripped\""
+            mv "$escaped" "$stripped"
+            cur_dir="$stripped"
+            ((quotes_removed_dir_count++))
+        fi
+    fi
+}
+
+location_clean() {
+    echo "location_clean \"$@\""
+    max_cleaner_size=30000
+    quoth=0
+    quotes_removed_files_count=0
+    quotes_removed_dir_count=0
+    underscore_file_removal_count=0
+    underscore_dir_removal_count=0
+    etc_file_removal_count=0
+
+    for base_path in "$@"; do
+        for path in "$base_path"/*; do
+            if [[ -d "$path" ]]; then
+                dir_name="${path##*\/}"
+                # \$RECYCLE\.BIN|System\ Volume\ Information|
+                if [[ "$dir_name" =~ \.TemporaryItems|\.fseventsd|\.Spotlight\-V100 ]]; then
+                    echo "rm -r \"$dir_name\""
+                    rm -r "$dir_name"
+                fi
+            fi
+        done
+    done
+
+    shopt -s dotglob
+    shopt -s globstar
+    ec3 "iter_complex -b clean_dir_before_fn -- \"$@\""
+    iter_complex -b clean_dir_before_fn -- "$@"
+    ec3 "iter_complex -f clean_file_fn -- \"$@\""
+    iter_complex -f clean_file_fn -- "$@"
+    shopt -u dotglob
+    shopt -u globstar
+
+    echo "quoth: $quoth"
+    echo "quotes_removed_files_count: $quotes_removed_files_count"
+    echo "quotes_removed_dir_count: $quotes_removed_dir_count"
+    echo "underscore_file_removal_count: $underscore_file_removal_count"
+    echo "underscore_dir_removal_count: $underscore_dir_removal_count"
+    echo "etc_file_removal_count: $etc_file_removal_count"
+}
+############### </location_clean> ################

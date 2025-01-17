@@ -1,0 +1,577 @@
+#!/bin/bash
+# . $_t/com
+
+# always import flags an ONLY flags
+# importing other modules will cause an infinite loop
+. $_t/util/colors_flags
+
+shopt -s expand_aliases
+export IFS=$' \t\n'
+export xo="=> exit"
+
+ec() {
+    echo -e "${COOL}$@${NOPE}"
+}
+ece() {
+    echo -e "$@"
+}
+ec1() {
+    echo -e "${PURP}$@${NOPE}"
+}
+ec2() {
+    echo -e "${LILAC}$@${NOPE}"
+}
+ec3() {
+    echo -e "${TIEL}$@${NOPE}"
+}
+ec_opt() {
+    echo -e "${L_ORAN}$@${NOPE}"
+}
+ec_opt_alt() {
+    echo -e "${H_ORAN}$@${NOPE}"
+}
+ec_pmt() {
+    echo -e "${H_WHITE}$@${NOPE}"
+}
+ec_err() {
+    echo -e "${V_RED}$@${NOPE}"
+}
+
+# echo then run command
+e_e() {
+    if [[ $# -lt 1 ]]; then
+        echo "e_e_ echo's params then sudo eval/executes them, $no_param"
+        return
+    fi
+    ec "\$: $@"
+    "$@"
+}
+
+# sudo print echo command or on windows just print echo
+if [[ -d /c/Windows ]]; then
+    export vsc_conf="$_h/AppData/Roaming/VSCodium/User"
+    e_e_() {
+        if [[ $# -lt 1 ]]; then
+            echo "e_e_ echo's params then sudo eval/executes them, $no_param"
+            return
+        fi
+        ec "\$: sudo $@"
+        sudo "$@"
+    }
+else
+    export vsc_conf="$_h/AppData/Roaming/VSCodium/User"
+    # bypass
+    e_e_() {
+        e_e "$@"
+    }
+fi
+
+# these are my quick access WIP scripts at root of repo (create and ignore locally)
+alias re_="$_u/re_ "
+alias re__="$_u/re__ "
+alias re___="$_u/re___ "
+
+alias rf="rm -rf "
+alias rf_="sudo rm -rf "
+
+iter_args() {
+    fn_name="$1"
+    shift
+    for arg in "$@"; do
+        cd "$arg"
+        $fn_name
+    done
+}
+
+find_cmd() {
+    local OPTIND o
+    type=""
+    # name=""
+    while getopts 't:n:' o; do
+        case "$o" in
+        t)
+            local_only=1
+            type="$OPTARG"
+            ;;
+        # n)
+        #     name="$OPTARG"
+        #     ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    [[ $# -lt 1 ]] && {
+        echo "Usage: find_cmd ?-t ?type find_what ?base_dir[def=.]"
+        return
+    }
+    base_dirs=()
+    search=""
+    while [[ $# -gt 0 ]]; do
+        [[ -d "$1" ]] && {
+            base_dirs+=("$1")
+        } || {
+            [[ -n "$search" ]] && {
+                echo "multiple non directory args, not supported, exiting"
+                return
+            }
+            search="$1"
+        }
+        shift
+    done
+    [[ -z "$search" ]] && {
+        echo "Usage: find_cmd ?-t ?type find_what ?base_dir[def=.]"
+        return
+    }
+    [[ ${#base_dirs} -eq 0 ]] && base_dirs=(.)
+    echo "base_dir: ${base_dir[@]}"
+    for base_dir in "${base_dirs[@]}"; do
+        if [[ -n $type ]]; then
+            echo "find \"$base_dir\" -type $type -name \"$search\""
+            find "$base_dir" -type "$type" -name "$search"
+        else
+            echo "find \"$base_dir\" -name \"$search\""
+            find "$base_dir" -name "$search"
+        fi
+    done
+}
+
+# find file
+f_f() {
+    find_cmd -t f "$@"
+}
+
+# find dir
+f_d() {
+    find_cmd -t d "$@"
+}
+
+# move year from ...(#) -> #...
+scut() {
+    cur_path="$(pwd)"
+    for path in "$cur_path"/*; do
+        name="${path##*\/}"
+        base="${path%\/*}"
+        #echo "name: $name"
+        if [[ -d "$path" ]]; then
+            if [[ "$name" =~ ^(.*)\ [\(\[](20[012][0-9])[\]\)](.*)$ ]] || [[ "$name" =~ ^(.*)\ [\(\[](19[6-9][0-9])[\]\)](.*)$ ]]; then
+                name_head="${BASH_REMATCH[1]}"
+                year=${BASH_REMATCH[2]}
+                name_tail="${BASH_REMATCH[3]}"
+                #echo "\$year: ${year}"
+                if [[ -n "$name_tail" ]]; then
+                    name="${year}_${name_head}_${name_tail}"
+                else
+                    name="${year}_${name_head}"
+                fi
+                echo "mv '$path' '$base/$name'"
+                mv "$path" "$base/$name"
+            else
+                echo "no match: '$name'"
+            fi
+        fi
+    done
+}
+
+# flag
+_f() {
+    if [[ $# -eq 0 ]]; then
+        ec "$f_0"
+    elif [[ $# -eq 1 ]]; then
+        ec "$f_1 $1 $f_2"
+    else
+        for arg in "$@"; do
+            ec "$f_1 $arg $f_2"
+        done
+    fi
+}
+
+rnd4() {
+    echo "$(($RANDOM % 999))" | xargs printf "%04d\n"
+}
+
+rnd2() {
+    echo "$(($RANDOM % 99))" | xargs printf "%02d\n"
+}
+
+path_to_lin() {
+    working_path="$1"
+    while [[ "$working_path" =~ (.*)\\\\(.*)$ ]]; do
+        working_path="${BASH_REMATCH[1]}\\${BASH_REMATCH[2]}"
+    done
+    while [[ "$working_path" =~ (.*)\\(.*)$ ]]; do
+        working_path="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    done
+    [[ "$working_path" =~ ^C:/(.*)$ ]] && {
+        working_path="/c/${BASH_REMATCH[1]}"
+    }
+    printf "$working_path" | clip
+    echo "$working_path"
+}
+alias ptl="path_to_lin "
+
+path_to_win() {
+    local working_path="$1"
+    [[ "$working_path" =~ ^\/ ]] && working_path="${1#*\/}"
+    working_path=$(echo "$working_path" | sed -E "s/^[cC][:]?/C:/g" | sed -E "s/\//\\\\/g" 2>/dev/null)
+    printf "$working_path" | clip
+    echo "$working_path"
+}
+alias ptw="path_to_win "
+
+# file/dir size
+fs() {
+    if [[ $# -eq 0 ]]; then
+        echo "Usage: fs file_path1 ?file_path2 ..."
+        return
+    fi
+    if [[ $# -eq 1 ]]; then
+        if [[ -f "$1" ]]; then
+            stat --printf="%s" "$1\n"
+        else
+            du -hs "$1"
+        fi
+        return
+    fi
+    for filepath in "$@"; do
+        if [[ -f "$filepath" ]]; then
+            stat --printf="%s\n" "$filepath"
+        else
+            du -hs "$filepath"
+        fi
+    done
+}
+
+serialize_arr() {
+    arr_name="$1"
+    declare -n var="$arr_name"
+    not_first=0
+    for entry in "${var[@]}"; do
+        if [[ $not_first -eq 0 ]]; then
+            ret_value="$entry"
+            not_first=1
+            continue
+        fi
+        ret_value="${ret_value}|${entry}"
+    done
+    # echo "serialize_arr: $ret_value"
+    echo "$ret_value"
+}
+
+deserialize_to_arr() {
+    line="$1"
+    oIFS="$IFS"
+    IFS='|'
+    t_arr=($line)
+    IFS="$oIFS"
+}
+
+is_in_array() {
+    arr_name="$1"
+    find_string="$2"
+    declare -n the_arr="$arr_name"
+    for item_in_arr in ${the_arr[@]}; do
+        # echo "item_in_arr: $item_in_arr"
+        if [[ $item_in_arr = $find_string ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+apush() {
+    declare -i arr="$1"
+    shift
+    arr+=("$@")
+}
+
+apop() {
+    declare -i arr="$1"
+    shift
+    declare _i=0
+    if [[ $1 =~ ^- ]]; then
+        while (($#)); do
+            if [[ $1 = '-a' ]]; then
+                declare -i output=$2
+                shift 2
+                continue
+            fi
+            if [[ $1 = '-n' ]]; then
+                declare c=$2
+                shift 2
+                continue
+            fi
+            echo "$1 is an invalid option"
+            return 1
+        done
+        while ((_i < c)); do
+            ((i += 1))
+            output+=("${arr[-_i]}")
+        done
+    else
+        for _v; do
+            declare -i _var=$_v
+            ((_i += 1))
+            _var=${arr[-_i]}
+        done
+        arr=("${arr[@]:0:$((${#arr[@]} - _i))}")
+    fi
+}
+
+export _dn_="/dev/null "
+
+4hex() {
+    openssl rand -hex 2
+    # | tr '\n' " "
+    # | sed 's/ //g'
+}
+8hex() {
+    openssl rand -hex 4
+    # | tr '\n' " "
+    # | sed 's/ //g'
+}
+
+ncut_1() {
+    line="$1"
+    echo $line | cut -d ' ' -f1
+}
+
+# ==> test if $1 is a full match to one of the rest of "$@"
+string_is() {
+    if [ $# -le 1 ]; then
+        [[ true == false ]]
+    elif [ $# -eq 2 ]; then
+        # base case
+        [[ $1 =~ ^$2$ ]]
+    else
+        local the_operand this_compare_string
+        the_operand="$1"
+        this_compare_string="$2"
+        shift 2
+        [[ $the_operand =~ ^$this_compare_string$ ]] || string_is $the_operand $@
+    fi
+}
+
+# https://unix.stackexchange.com/questions/598036/how-to-check-if-variable-is-integer-avoid-problem-with-spaces-around-in-posix
+is_int() {
+    # case "${1#[+-]}" in w/sign
+    case "$1" in # w/o sign
+    *[!0123456789]*) return 1 ;;
+    '') return 1 ;;
+    *) return 0 ;;
+    esac
+}
+
+fn_exists() {
+    if [ $# -le 0 ]; then
+        #ec $#
+        echo "usage: fn_exists ?all fn_name "
+        return
+    fi
+    ec $(type -t $1)""
+    # appended double quote is an ugly trick to make sure we do get a string -- if $1 is not a known command, type does not output anything
+    [ $(type -t $1)"" == 'function' ] || [ $(type -t $1)"" == 'shell function' ] || [ $(type -t $1)"" == 'builtin' ]
+}
+
+kill_s() {
+    search_s="$1"
+    ps_all=$(ps -A | grep $search_s)
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        ps_l1=$(ncut_1 $line)
+        [[ $ps_l1 =~ ^[0-9]*$ ]] && {
+            kill -9 $ps_l1
+        }
+
+    done <<<"$ps_all"
+}
+
+is_one_of() {
+    check_dir="${1##*\/}"
+    if [[ -z "$check_dir" ]]; then
+        [[ 0 -eq 1 ]]
+        return
+    fi
+    shift
+    check_arr=("$@")
+    ec2 "is_one_of: '$check_dir' '${check_arr[@]}'"
+    ec "check w/dir: $check_dir"
+    for a_base_dir in "${check_arr[@]}"; do
+        ec "a_base_dir: $a_base_dir"
+        [[ "$check_dir" = "$a_base_dir" ]] && {
+            [[ 1 -eq 1 ]]
+            return
+        }
+    done
+    [[ 0 -eq 1 ]]
+}
+
+args_to_string() {
+    local arg_string=""
+    local arg_array=()
+    for arg in "$@"; do
+        if [[ $(type -t $arg) = function ]]; then
+            $(${arg}) && arg_array+=("$arg")
+        elif [[ -n "${!arg}" ]]; then
+            arg_array+=("${!arg}")
+        fi
+    done
+    echo "${arg_array[@]}"
+}
+
+true() {
+    [ 1 -eq 1 ]
+}
+false() {
+    [ 0 -eq 1 ]
+}
+truthy() {
+    if [[ $# -gt 2 ]]; then
+        echo "too many params passed to '\$: is_true', quote 'values' "
+    elif [[ $# -eq 2 ]]; then
+        [[ $1 -eq $2 ]]
+    else
+        [[ $1 -eq 1 ]]
+    fi
+}
+falsey() {
+    if [[ $# -gt 2 ]]; then
+        echo "too many params passed to '\$: falsey', quote 'values' "
+    elif [[ $# -eq 2 ]]; then
+        [ ! "$1" = "$2" ]
+    else
+        [ ! "$1" = "1" ]
+    fi
+}
+
+# _nd => make dir -p w/no cd $@
+# automatically create all intermediate dirs
+alias _nd="mkdir -p "
+
+rnd() {
+    echo $(($RANDOM % $1))
+}
+
+# little rnd hash (0-999)
+lil_rnd() {
+    rnd 1000
+}
+
+_true() {
+    [ 1 = 1 ]
+}
+
+_false() {
+    [ 0 = 1 ]
+}
+f_t() {
+    echo "true"
+    exit
+}
+f_f() {
+    echo "false"
+}
+f_t_exit() {
+    f_t
+    exit
+}
+f_f_exit() {
+    f_f
+    exit
+}
+seps='([\._[:space:]]|[-])+'
+
+# test="a b c"; i=1; sseg=$(ec $test | _cut);  unset i; ec $seg; unset test;
+_cut() {
+    if [[ ! -v i ]]; then
+        echo -e "set i before calling cut_ as in \n\t:\$ i=1; echo \"...\" | cut_ ; unset i\n"
+        # to research access pipe how ?
+        # echo "passthrough echo "
+        # echo "$@"
+    else
+        # cut -d' ' -f $i
+        tr -s ' ' | cut -d' ' -s -f$i
+        #-f=2
+    fi
+    unset i
+    #echo "_"
+}
+
+_por() {
+    sudo lsof -t -itcp:$1
+}
+_por_k() {
+    sudo kill -9 $(port $1)
+}
+
+return
+
+############## WIP ##############################
+# moon() {
+#     hux open_keys
+# }
+
+# deserialize_arr() {
+#     arr_name="$1"
+#     declare -n var="$arr_name"
+#     not_first=0
+#     for entry in ${var[@]}; do
+#         if [[ $not_first -eq 0 ]]; then
+#             ret_value="$entry"
+#             not_first=1
+#             continue
+#         fi
+#         ret_value="${ret_value}|${entry}"
+#     done
+#     # echo "serialize_arr: $ret_value"
+#     echo "$ret_value"
+# }
+
+# clt() {
+#     if [[ $# -lt 1 ]]; then
+#         ec3 "USAGE: clit 'string_to_copy'"
+#         return
+#     fi
+#     echo -e "${COOL}xclip -sel clip '$@'${NOPE}"
+#     echo "$@" | xclip -sel clip
+# }
+
+# deserialize_to_echo() {
+#     line="$1"
+#     while IFS="|" read sha2 file1 file2; do
+#         echo "$sha2"
+#         echo "$file1"
+#         echo -n "$file2"
+#     done <<<"$line"
+# }
+
+# rotate out contents of ~/lit & re-bin #!/bin/bash
+# rot() {
+#     echo "needs updating on next use"
+#     return
+#     if [[ $# -lt 1 ]]; then
+#         #echo "rot rotates a files contents to \${1}_\$(rnd 9), $no_param"
+#         local tar=~/lit
+
+#     else
+#         local tar="$1"
+#     fi
+#     if [[ ! -f $tar ]] && [[ $# -lt 2 || ! $2 =~ ^_$ ]]; then
+#         if [[ $# -lt 2 || ! $2 =~ ^_$ ]]; then
+#             touch "$1"
+#         else
+#             if ! [[ $tar =~ ^/ || $tar =~ ^~ ]]; then
+#                 $tar="$tar at path: $(pwd)"
+#             fi
+#             echo "file: $1 dne, tail with '_' to create "
+#         fi
+#         return
+#     fi
+
+#     if [[ -f "$tar" ]]; then
+#         if [[ -f "${tar}_cl" ]]; then
+#             # skip #!/bin/bash
+#             cat ${tar} | awk "FNR>1{print \$0 >> \"${tar}_cl\" }"
+#         else
+#             cat ${tar} >>"${tar}_cl"
+#         fi
+#     fi
+#     #echo -e "#!/bin/bash\n">"$tar"
+# }

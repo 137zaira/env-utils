@@ -1,0 +1,138 @@
+#!/bin/bash
+# x_ "$_s/arc/run"
+# run a_film a_tv shelf_film shelf_tv
+
+# run shelf_film shelf_tv shelf_film_ripe shelf_tv_ripe
+# run a_film a_tv s_xxx ty shelf_film shelf_tv ty_xxx_delete unite_delete
+
+# Sectional Info
+# 1 set/update constants
+# 2 args -n=dry -e=[errata=int]
+# 5 clear logs + start _re_ w/location constant
+
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+
+$r_ _ sql iter_complex pmt
+#echo "support code loaded"
+
+###############################################
+if [[ $# -eq 0 ]]; then
+    export run_type=a_film
+    # export run_type=alt_film
+    # export run_type=shelf_film
+fi
+
+###############################################
+export open_data="/_/files/dat"
+export open_db_path="$open_data/video.db"
+export open_log_dir="$open_data/logs"
+
+extra_args=""
+export errata=5
+while getopts 'hncf:e:' OPTION; do
+    case "$OPTION" in
+    h)
+        echo "Usage: run -h (this help) -c (clean/init) -e [error_level]"
+        exit
+        ;;
+    n)
+        dry() {
+            [[ 1 -eq 1 ]]
+        }
+        extra_args="-n $extra_args"
+        ;;
+    c)
+        extra_args="-c $extra_args" # clean/init
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+export video_ext="mp4 mkv m4v mov mpg mpeg wmv vob avi wmv"
+export audio_ext="flac mp3 m4a wav"
+export compressed_ext="7z zip rar tar"
+export large_etc_ext="webm msi iso epub mobi ogm"
+export extensions="'$video_ext $audio_ext $compressed $large_etc_ext'"
+
+set_vars() {
+    run_name="$1"
+    echo "set_vars: $run_name"
+
+    ############### <defaults> ####################
+    export primary_tables=''
+    export skip_dirs=""
+    export db_file="$open_db_path"
+    export log_dir="$open_log_dir"
+    ############## </defaults> ####################
+
+    # sets paths in a primary table
+    [[ $run_name = film ]] && {
+        export arc_fn="main"
+        export location="/a/1_film"
+        export db_table="film"
+        # WIP union table
+        export unify_table="main"
+        export skip_dirs="resort"
+    }
+
+    # sorts files into existing_dir/unique_dir if in main_db_table
+    [[ $run_name = shelf_film ]] && {
+        export arc_fn="shelf"
+        export db_table="shelf_film"
+        export main_db_table="film"
+        export existing_dir="/i/tit/1_film"
+        export unique_dir="/i/tit/1_film_new"
+    }
+
+    # Alt: to run on rsync backup before rsync to update file paths (reduces write wear)
+    [[ $run_name = alt_film ]] && {
+        export arc_fn="alt"
+        export location="/a/1_film"
+        export db_table="film"
+
+    }
+}
+
+# [[ -n "$errata" ]] && {
+#     extra_args="-e $errata $extra_args"
+# }
+
+run_loop() {
+    run_name="$1"
+    set_vars "$run_name"
+    "$_s/arc/scripts/$arc_fn" ${extra_args} "$location"
+}
+
+# ######### END SOURCED #########
+if [[ as_source -eq 1 ]]; then
+    if [[ $# -gt 0 ]]; then
+        set_vars "$1"
+    fi
+    return
+fi
+
+# echo "check_all_db_vars"
+# check set - location|db_file|db_table
+# echo "//check_all_db_vars"
+# if [[ $# -gt 0 ]]; then
+#     _re_ "$@"
+# else
+#     yes_or_no "no args supplied run: '$arc_fn' from default location: \"$location\"" && {
+
+########### START ############
+# ec1 "\$location: $location"
+if [[ $# -gt 0 ]]; then
+    for arg in "$@"; do
+        run_loop "$arg"
+    done
+else
+    echo "Usage: run [film/alt_film/shelf_film/...] [film/alt_film/shelf_film/...]"
+fi

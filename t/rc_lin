@@ -1,0 +1,643 @@
+#!/bin/bash
+
+. $_t/com
+. $_t/ali
+# file for jog_bg
+. $_t/file
+
+alias scr="xset dpms force off "
+alias x_off="xset dpms force off "
+alias s_s="xdg-screensaver activate"
+alias who="ec $USER "
+alias row="sudo chown -R root:root "
+alias zow="sudo chown -R $user:$user "
+alias h_cl="history -c; >~/.bash_history "
+
+alias xc="xclip -sel clip "
+alias x_ssh="cat ~/.ssh/id_ed25519.pub | xc -sel clip "
+
+alias lti="$_t/sys_lin/jog_bg "
+alias lti_="rm '$_h/ten/bg'; '$_t/sys_lin/jog_bg' "
+alias lti_log="$_t/sys_lin/jog_login "
+
+alias e_src="e_e so gedit /etc/apt/sources.list & "
+
+# clear dns cache
+alias c_dns="sudo resolvectl flush-caches "
+
+export max_cleaner_size=10000
+
+alias r_hosts="/_/util/fire/scripts/0_ "
+alias a_then="/_/util/fire/scripts/add_then "
+alias e_src="e_e so gedit /etc/apt/sources.list & "
+
+g_host() {
+    hostname="$1"
+    t_dig=$(dig @192.168.1.7 $hostname)
+    # echo "t_dig: $t_dig"
+    answer_section=0
+    found=0
+    while IFS= read -r dig_line; do
+        if [[ $answer_section -eq 0 ]]; then
+            if [[ "$dig_line" =~ .*ANSWER\ SECTION.* ]]; then
+                answer_section=1
+            fi
+            continue
+        fi
+
+        if [[ "$dig_line" =~ ^.*[[:space:]]([[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3})[[:space:]]?$ ]]; then
+            padded_ip=$(printf "%-15s" "${BASH_REMATCH[1]}")
+            # ip_hostname="$padded_ip $hostname"
+            # echo "$ip_hostname" | sudo tee -a /etc/hosts
+            echo "$padded_ip"
+            return 0
+        fi
+    done <<<"$t_dig"
+    return 1
+}
+a_host() {
+    [[ $# -lt 1 ]] && {
+        echo "Usage: a_host hostname"
+        return 1
+    }
+    hostname="$1"
+    # echo "g_host $hostname"
+    host_ip="$(g_host $hostname)"
+    # echo "host_ip: $host_ip"
+    if [[ $? -eq 0 && -n "$host_ip" ]]; then
+        echo -e "\n$host_ip $hostname" | sudo tee -a "/etc/hosts"
+    else
+        echo "host_ip not found ?errata: $host_ip"
+    fi
+}
+
+7z_u() {
+    cd /i/s/u
+    arc5 u_lin.7z $_u/notes $_u/s $_u/set $_u/t
+}
+
+if [[ ! \/go\/ =~ "$PATH" ]]; then
+    export PATH=$PATH:/usr/local/go/bin
+fi
+
+f_h() {
+    find . -name "*${1}*" 2>/dev/null
+}
+
+f_s() {
+    find /i/s -name "*${1}*" 2>/dev/null
+    #| grep -v "*No such file or directory"
+}
+
+f_ty() {
+    find /i/ty -name "*${1}*" 2>/dev/null
+    # | grep -v "*No such file or directory"
+}
+
+export u_proxy_dir="/i/s/u"
+p_l_y() {
+    local path="$1"
+    local sub_path
+    if [[ -d "$path" ]]; then
+        # echo "p_l_y dir path: '$path'"
+        for sub_path in "$path"/*; do
+            p_l_y "$sub_path"
+        done
+    elif [[ -f "$path" ]]; then
+        sub_path="${path##${u_proxy_dir}\/}"
+        local update_file_path="$_u/$sub_path"
+        update_path_parent="${update_file_path%\/*}"
+        if [[ "$path" =~ .delete ]]; then
+            delete_file_path="${update_file_path%.delete}"
+            rm "$delete_file_path"
+            return
+        fi
+        if [[ ! -d "$update_path_parent" ]]; then
+            echo "mkdir -p \"$update_path_parent\""
+            mkdir -p "$update_path_parent"
+        fi
+        echo "cp \"$path\" \"$update_file_path\""
+        mv -f "$path" "$update_file_path"
+    fi
+}
+
+convert_dir_to_lin() {
+    for file_path in "$1"/*; do
+        [[ -d "$file_path" ]] && {
+            convert_dir_to_lin "$file_path"
+            continue
+        }
+        echo "dos2unix \"$file_path\""
+        dos2unix "$file_path"
+    done
+}
+
+modified_to_lf() {
+    cd "$1"
+    local status=$(git status)
+    while read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ modified\:[[:space:]]+([^\ ]*)$ ]]; then
+            echo "dos2unix \"$_u/${BASH_REMATCH[1]}\""
+            dos2unix "$_u/${BASH_REMATCH[1]}"
+        fi
+    done <<<"$status"
+}
+
+ply() {
+    cd "$_u"
+    if [[ -n "$(git status --porcelain)" ]]; then
+        echo "$(git status --porcelain)"
+        echo "commit '$_u' before ply"
+        return
+    fi
+    for path in "$u_proxy_dir"/*; do
+        [[ -d "$path" ]] && {
+            echo "ply => p_l_y path: '$path'"
+            p_l_y "$path"
+        }
+    done
+    modified_to_lf "$_u"
+}
+
+punt() {
+    rm -r "$u_proxy_dir"/*
+    punt_paths=(".gitignore" "Readme.md")
+    cd "$_u"
+    for path in *; do
+        [[ -d "$path" && ! "$path" = node_modules ]] && {
+            # echo "punt dir path: '$path'"
+            if [[ ! "$path" =~ .git$ ]]; then
+                punt_paths+=("$path")
+            fi
+        }
+    done
+    echo "punt_paths: ${punt_paths[@]}"
+    arc1 "$u_proxy_dir/u.7z" "${punt_paths[@]}"
+}
+
+f_f() {
+    f_s "$1"
+    f_ty "$1"
+}
+
+f_arc() {
+    find /media/z/x_arc -name "*${1}*" 2>/dev/null
+}
+
+f__f() {
+    f_s "$1"
+    f_ty "$1"
+    f_arc "$1"
+}
+
+vlc() {
+    if [[ $# -gt 0 && -n "$@" ]]; then
+        /usr/bin/vlc "$@" &
+    else
+        /usr/bin/vlc &
+    fi
+}
+
+vlcn() {
+    if [[ $# -gt 0 && -n "$@" ]]; then
+        vlc --no-autoscale "$@" &
+    else
+        vlc --no-autoscale &
+    fi
+}
+
+lc() {
+    if [[ $# -gt 0 && -n "$@" ]]; then
+        "$_b/bin/lc/losslesscut" "$@" &
+    else
+        "$_b/bin/lc/losslesscut" &
+    fi
+}
+
+plk() {
+    plank_line=$(ps -A | grep plank)
+    plank_ps=$(echo $plank_line | cut -d " " -f1)
+    kill -9 $plank_ps
+    sleep 1
+    plank &
+}
+
+fat_lab() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: fat_lab device new_label"
+        return
+    fi
+    exfatlabel "$1" "$2"
+}
+
+to() {
+    touch "$@"
+}
+
+proc() {
+    [[ $# -eq 0 ]] && {
+        ps -e
+        return
+    }
+    ps -e | grep "$1"
+}
+
+k_h() {
+    pid=($(ps -e | grep "hollow_knight.x"))
+    if [[ ${#pid[@]} -lt 1 ]]; then
+        echo "pid not found for \"hollow_knight.x\""
+        return
+    fi
+    echo "killing pid: ${pid[0]}"
+    kill -9 ${pid[0]}
+}
+hu() {
+    replace_with="$1"
+    cp -f "$replace_with" "/home/z/.config/unity3d/Team Cherry/Hollow Knight/user1.dat"
+}
+hs() {
+    title="$1"
+    cp "/home/z/.config/unity3d/Team Cherry/Hollow Knight/user1.dat" "/home/z/Documents/hk/$title.dat"
+}
+
+e_e() {
+    echo "$@"
+    "$@"
+}
+alias rf="rm -rf "
+alias clt="rm /home/z/.cache/thumbnails/normal/* 2>/dev/null; rm /home/z/.cache/thumbnails/fail/mate-thumbnail-factory/* 2>/dev/null "
+
+alias rust_in="npm init -y; npm i -D prettier prettier-plugin-rust "
+alias e_grub="e_ grub"
+alias e_log="echo sudo glib-compile-schemas /usr/share/glib-2.0/schemas; sudo pluma /usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override "
+alias e_hos="codium /etc/hosts "
+alias d_stl="man sqlite3 "
+alias ns="nslookup "
+alias nsc="resolvectl flush-caches "
+alias sta_wit="$_b/gogs/start "
+alias x_="sudo chmod +x "
+alias _x="x_ "
+crom() {
+    #$home/AppData/Local/Chromium/Application/chrome_proxy.exe "$@" &
+    /usr/bin/chromium "$@"
+}
+crom_doc() {
+    #$home/AppData/Local/Chromium/Application/chrome_proxy.exe "$@" &
+    if [[ -f "./target/doc/help.html" ]]; then
+        /usr/bin/chromium "./target/doc/help.html"
+    else
+        echo -e "run $: cargo doc \nfirst"
+    fi
+}
+
+# update_env user z
+update_env_var() {
+    [[ $# -lt 2 ]] && {
+        echo "Usage: update_env_var [var_name] [value]"
+    }
+    var=$1
+    val=$2
+    target=/etc/environment
+    bk="/etc/environment_$(($RANDOM % 1000))"
+    sudo mv -f /etc/environment $bk
+    found=0
+    while read -r line || [[ -n "$line" ]]; do
+        if [[ $line =~ ^${var}\= ]]; then
+            [[ found -eq 0 ]] && {
+                echo "${var}=$val" | sudo tee -a $target
+            }
+            found=1
+        else
+            echo "$line" | sudo tee -a $target
+        fi
+    done <"$bk"
+    # cat $target
+    sudo rm /etc/env
+    sudo ln $target /etc/env
+    echo "***logout for var change to take effect***"
+}
+
+cd_() {
+    [[ $# -eq 0 ]] && {
+        cd "$_dev"
+        return
+    }
+    tar="$1"
+    # b, u, files, ...
+    [[ -d "$_h/$tar" ]] && {
+        cd "$_h/$tar"
+        return
+    }
+    # as in the value of the variable named $1
+    [[ -n "${!tar}" && -d "${!tar}" ]] && {
+        echo "\${!tar}: '${!tar}'"
+        cd "${!tar}"
+        return
+    }
+    dev_dirs=("ci" "cj" "cl" "co" "cr" "cv" "u" "b" "files")
+    for a_dir in "${dev_dirs[@]}"; do
+        [[ -d "$_h/$a_dir/$tar" ]] && {
+            echo "cd \"$_h/$a_dir/$tar\""
+            cd "$_h/$a_dir/$tar"
+            return
+        }
+    done
+    echo "\$tar: $tar not found under any hub dir"
+}
+
+fun() {
+    if [[ $# -gt 0 ]]; then
+        nautilus $@ &
+    else
+        nautilus .
+    fi
+}
+alias nvs="nvidia-smi; "
+mnt() {
+    if [[ $1 = _ ]]; then
+        com="umount"
+        shift
+    else
+        com="mount"
+    fi
+    if [[ $# -gt 1 ]]; then
+        for dev in $@; do
+            e_e sudo $com UUID="$dev"
+        done
+    else
+        e_e sudo $com UUID="$1"
+    fi
+}
+alias unt="mnt _ '6373-62F4' '6373-62F8' '6373-62FB' "
+alias nt_="mnt '6373-62F4' '6373-62F8' '6373-62FB' "
+alias so="sudo "
+alias apt_src="so gedit /etc/apt/sources.list "
+alias apt_src_d="ls /etc/apt/sources.list.d "
+alias apt_u="so apt update "
+# alias apt_un="so apt update "
+alias apt_ug="so apt upgrade "
+alias apt_dug="so apt dist-upgrade "
+alias apt_uf="so apt update --fix-missing "
+alias apt_i="so apt install "
+alias apt_ui="so apt_u; so apt_i "
+alias apt_ufi="so apt_uf; so apt_i "
+alias apt_ar="sudo apt autoremove "
+apt_r() {
+    sudo apt remove --purge "$@"
+    sudo apt autoremove
+}
+c_cache() {
+    rf /home/z/.cache/thumbnails/* /home/z/ten/* /home/z/.cache/vlc/art/arturl /_/ten/*
+    rf /_/cl/dif/cache* /_/cl/dif/__pycache__ /_/cl/dif/modules/__pycache__
+    rf /home/z/.bash_history
+    rf /home/z/Videos/vlc-record-*
+    rf /_/files/dat/logs/*
+    rm -rf "/home/z/.cache/chromium/Default"/*
+    # rm -rf "/home/z/.cache/chromium/Default/Cache/Cache_Data"/*
+}
+
+# move all and give user ownership
+cp_x() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: cp_ src1 src2 ... dest, at least 2"
+        return
+    fi
+    dest=${@: -1}
+    set -- "${@:1:$#-1}"
+    sudo cp "$@" "$dest"
+    for arg in "$@"; do
+        arg_name="${arg##*\/}"
+        sudo chown -R $user:$user "$dest/$arg_name"
+    done
+}
+
+alias apt_s="apt show "
+# add_exf nvme1n1p2 /f
+# sudo blkid -s UUID -o value /dev/nvme1n1p2
+# $(blkid -s UUID -o value ${dev_p}${_boot})
+add_exf() {
+    if [[ $# -lt 2 ]]; then
+        echo "\$1=device(nvme1n1p2) \$2=mount point are required args"
+        return
+    fi
+    UUID="$(sudo blkid -s UUID -o value /dev/$1)"
+    if [[ -z "$UUID" ]]; then
+        echo "UUiD not found for device: /dev/$1"
+        return
+    fi
+    echo "UUID=$UUID                                             $2 exfat defaults,user,exec,nofail,x-system.device-timeout=10,uid=1000,gid=1000,umask=0002 0 0" | sudo tee -a /etc/fstab
+    sudo mkdir -p "$2"
+    mount UUID=$UUID
+}
+add_ext4() {
+    if [[ $# -lt 2 ]]; then
+        echo "\$1=device(nvme1n1p2) \$2=mount point are required args"
+        return
+    fi
+    UUID="$(sudo blkid -s UUID -o value /dev/nvme1n1p2)"
+    if [[ -z "$UUID" ]]; then
+        echo "UUiD not found for device: /dev/$1"
+        return
+    fi
+    echo "UUID=$UUID  $2      ext4 defaults,user,exec,auto,nofail,x-systemd.device-timeout=25 0 2" | sudo tee -a /etc/fstab
+    mount UUID=$UUID
+}
+
+alias e_stab="co /etc/fstab "
+alias e_env="co /etc/environment "
+# a_host() {
+#     dig_res="$(dig $1)"
+#     answer_on_next=""
+#     while read line | [[ -n "$line" ]]; do
+#         if [[ -n $answer_on_next ]]; then
+#             if [[ -n "$line" ]]; then
+#                 cut -D \ 4 "$line"
+#             fi
+#             break
+#         fi
+#     done
+# }
+
+# ec "151.101.1.168 python.org" >>/etc/hosts
+
+apt_g() {
+    apt list | grep "$@"
+}
+apt_gi() {
+    apt list | grep "$@" | grep "installed"
+}
+pkg_g() {
+    dpkg-query --list | grep "$@"
+}
+
+EXLUDE_DIRS=('*System\ Volume\ Information' "*.Trash*" "*RECYCLE\.BIN*")
+excludes=()
+for item in "${EXLUDE_DIRS[@]}"; do
+    excludes+=(--exclude="'$item'")
+    # excludes="$excludes --exclude=\"$item\""
+done
+
+# sysctl
+ser() {
+    service --status-all
+}
+ser_g() {
+    ser | grep "$@"
+}
+
+# psql
+set_g() {
+    gsettings list-recursively | grep "$@"
+}
+
+alt_open() {
+    cryptsetup luksOpen UUID=b997e752-ce7f-4c6e-a46f-f26bd90809ad ALTROOT
+    mount /dev/mapper/ALTROOT
+}
+
+export src_dir="/_/files/bgs"
+check_bg_cache() {
+    if [[ ! -d "$ten/bg" ]]; then
+        _nd "$ten/bg"
+    fi
+    bg_dir="$src_dir"
+    bg_q="$ten/bg/q"
+    bg_a="$ten/bg/a"
+    _bg=""
+
+    not_empty="1"
+    cache_file_lists=("$bg_q" "$bg_a")
+    for cache_list in "${cache_file_lists[@]}"; do
+        if [[ ! -f "$cache_list" || $(
+            wc -l $cache_list | awk '{print $1}'
+        ) = 0 ]]; then
+            not_empty=""
+            break
+        fi
+    done
+    if [[ -z "$not_empty" ]]; then
+        ls -UA1 --file-type "$bg_dir" | grep "[^/]$" >"$bg_a"
+        cat $bg_a >$bg_q
+    fi
+    bg_count=$(
+        wc -l $bg_q | awk '{print $1}'
+    )
+}
+
+sld_v() {
+    sld -h 3820 -w 2160 "$@"
+}
+
+sld_h() {
+    sld -h 1600 -w 1600 "$@"
+}
+
+jog_bg() {
+    if [[ $USER = root ]]; then
+        echo "updating with gsettings requires active dbus for a user not root"
+        exit
+    fi
+    check_bg_cache
+    if [[ $bg_count -gt 0 ]]; then
+        line=$(($RANDOM % $bg_count))
+        _bg=$(get_line "$bg_q" "${line}p")
+        del_line "$bg_q" "${line}"
+        ec "bg setting to $_bg"
+        e_e gsettings set org.mate.background picture-filename "$bg_dir/$_bg"
+
+    else
+        ec "bg_dir: $bg_dir appears empty"
+    fi
+}
+
+############## rsync ##############
+# rsn /path1/xyz/ /path2/abc/
+rsn() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnn src/ dest/"
+        return
+    fi
+    flag="-avu --size-only"
+    # rsync $flag "${excludes[@]}" "$@"
+    # --exclude='*sync*' "$@" | grep -E '^deleting|[^/]$'
+    echo "rsync $flag --exclude='*System\ Volume\ Information' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' "$@" | grep -E '^deleting|[^/]$'"
+    rsync $flag --exclude='*System\ Volume\ Information' --exclude="*.Trash*" --exclude="*RECYCLE\.BIN*" "$@" | grep -E '^deleting|[^/]$'
+}
+# dry run (only show changes)
+rsnn() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnn src/ dest/"
+        return
+    fi
+    flag="-avun --size-only"
+    # echo "rsync $flag ${excludes[@]} \"$@\""
+    # rsync $flag "${excludes[@]}" "$@"
+    # | grep -E '^deleting|[^/]$'
+    rsync $flag --exclude='*System\ Volume\ Information' --exclude="*.Trash*" --exclude="*RECYCLE\.BIN*" --exclude='*sync*' "$@"
+}
+
+# with delete
+rsn_() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnn src/ dest/"
+        return
+    fi
+    flag="-avu --size-only --delete"
+    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
+    rsync $flag ${exclude_var[@]} "$@" | grep -E '^deleting|[^/]$'
+}
+
+# with delete dry
+rsnn_() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnn src/ dest/"
+        return
+    fi
+    flag="-avun --size-only --delete"
+    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
+    rsync $flag ${exclude_var[@]} "$@" | grep -E '^deleting|[^/]$'
+}
+
+# dry run remote sync from vox to shear
+rsnrn() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnrn src/ dest/"
+        return
+    fi
+    src="$1"
+    dest="$2"
+
+    vox="169.254.69.94"
+    shear="169.254.41.130"
+    # dest="z@$vox:$src"
+    dest="z@$shear:$src"
+
+    flag="-avun --size-only --delete"
+    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
+    echo "############### ############ ###############"
+    echo "rsync $flag ${exclude_var[@]} \"$src\" \"$dest\""
+    rsync $flag ${exclude_var[@]} "$src" "$dest"
+    echo "############### ############ ###############"
+}
+
+# remote sync from vox to shear
+rsnr() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnr src/ dest/"
+        return
+    fi
+    src="$1"
+    dest="$2"
+
+    vox="169.254.69.94"
+    shear="169.254.41.130"
+    # dest="z@$vox:$dest"
+    dest="z@$shear:$dest"
+
+    flag="-auv --size-only --delete"
+    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
+    echo "rsync $flag ${exclude_var[@]} \"$src\" \"$dest\""
+    rsync $flag ${exclude_var[@]} "$src" "$dest"
+    #| grep -E '^deleting|[^/]$'
+}
+###################################

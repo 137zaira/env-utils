@@ -1,0 +1,218 @@
+#!/bin/bash
+# Usage: si -2 = shasum -a 256 | sha -5 | sha -a224 | sha -a5256 = shasum -a 512256$NOPE
+# x_ $_s/one_shots/si $_s/one_shots/sid $_s/one_shots/sin $_s/one_shots/sia
+# x_ $_s/one_shots/sir $_s/one_shots/si_d $_s/one_shots/si_n $_s/one_shots/si_a
+# cp --force "$_s/one_shots/sha" "/home/z/bin/sha"
+# sudo rf "/home/z/bin/sha"
+
+# if no arg
+alg=256
+if_atype_opt=""
+export LILAC="\033[1;38;2;170;60;255m"
+export COOL="\033[1;38;2;110;70;255m"
+export ERROR='\033[1;41m'
+export NOPE='\033[0m'
+
+ecl() {
+    echo -e "${LILAC}$@${NOPE}"
+}
+ece() {
+    echo -e "${LILAC}$@${NOPE}"
+}
+ecc() {
+    echo -e "${COOL}$@${NOPE}"
+}
+copy_sha=0
+match_sha=0
+recurse=0
+reflux=""
+# while getopts 'a:' OPTION; do
+while getopts '1235a:m:r' OPTION; do
+    case "$OPTION" in
+    a)
+        alg="a"
+        if_atype_opt="$OPTARG"
+        ;;
+    m)
+        # if no arg passed set as pair-match and reflux the first arg just yankedo
+        [[ -d "$OPTARG" ]] && {
+            reflux="$OPTARG"
+            match_sha=2
+        } || {
+            if [[ ! "$OPTARG" =~ ^[2-4]$ ]]; then
+                ecl "si -m requires a numeric arg 2,3 or 4 for matching group size"
+                exit
+            fi
+            match_sha=$OPTARG
+        }
+        ;;
+    r)
+        recurse=1
+        ;;
+    1)
+        alg=1
+        ;;
+    2)
+        alg=256
+        ;;
+    3)
+        alg=384
+        ;;
+    5)
+        alg=512
+        ;;
+    ?)
+        ece "bad argument! arg: $OPTION" >&2
+        ecl "Usage: si -2 = shasum -a 256 | si -5 | si -a224 | si -a5256 = shasum -a 512256" >&2
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+if [[ -n "$reflux" ]]; then
+    set -- "$reflux" "$@"
+fi
+
+if [[ "$alg" = a ]]; then
+    # if -a arg
+    case "$if_atype_opt" in
+    1)
+        alg=1
+        ;;
+    224)
+        alg=224
+        ;;
+    2 | 256)
+        alg=256
+        ;;
+    3 | 384)
+        echo "sha1"
+        alg=384
+        ;;
+    5 | 512)
+        echo "sha1"
+        alg=512
+        ;;
+    512224 | 5224)
+        alg=512224
+        ;;
+    512256 | 5256)
+        alg=512256
+        ;;
+    ?)
+        ecl "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+fi
+if [[ $# -lt 1 ]]; then
+    ecl "sha requires arg(s) for target files"
+    exit
+fi
+
+if [[ $recurse = 1 ]]; then
+    dir1="$1"
+    dir2="$2"
+
+    if [[ ! -d "$dir1" || ! -d "$dir2" ]]; then
+        ecl "Usage: si -r 'dir1' 'dir2', both must be existing directories"
+        exit
+    fi
+    iter_dir() {
+        t_dir="$1"
+        deeper_dirs=()
+        for a_path in "$1"/*; do
+            sub_fork="${a_path##*$dir1}"
+            if [[ -f "$a_path" ]]; then
+                match_path="$dir2/$sub_fork"
+                file_name=$(basename "$a_path")
+                echo "file_name: $file_name"
+                # fork_path="${}"
+                if [[ ! -f "$match_path" ]]; then
+                    ecl "missing file: '$match_path'"
+                    continue
+                fi
+                t_sha=($(shasum -a $alg "$a_path"))
+                t_sha=$t_sha
+                m_sha=($(shasum -a $alg "$match_path"))
+                m_sha=$m_sha
+                if [[ $t_sha = $m_sha ]]; then
+                    ecc "match: $file_name"
+                else
+                    ecl "mismatch: $file_name"
+                    ecl "$t_sha '$a_path'"
+                    ecl "$m_sha '$match_path'"
+                fi
+            fi
+        done
+    }
+    iter_dir "$dir1"
+    exit
+fi
+
+# echo -e "${COOL}shasum -a $alg \"$@\"${NOPE}"
+if [[ ! $match_sha -eq 0 ]]; then
+    had_error=0
+
+    echo "match_sha: $match_sha"
+    exit
+
+    zero_set() {
+        counter=0
+        match_count=0
+        mismatch_count=0
+        test_sha=""
+    }
+    zero_set
+
+    report_match_result() {
+        if [[ $mismatch_count -eq 1 ]]; then
+            had_error=1
+            ecl "a mismatch occurred!"
+        elif [[ $mismatch_count -gt 1 ]]; then
+            had_error=1
+            ecl "$mismatch_count mismatches occurred!"
+        else
+            if [[ $match_sha -eq 2 ]]; then
+                ecc "pair matched!"
+            else
+                ecc "all $match_sha matched"
+            fi
+        fi
+    }
+
+    for arg in "$@"; do
+        if [[ $counter -eq 0 ]]; then
+            test_sha=($(shasum -a $alg "$arg"))
+            test_sha=$test_sha
+            echo $test_sha
+
+        else
+            t_sha=($(shasum -a $alg "$arg"))
+            t_sha=$t_sha
+            if [[ $t_sha = $test_sha ]]; then
+                ((match_count++))
+            else
+                ecl "mismatch: $t_sha $arg"
+                ((mismatch_count++))
+            fi
+        fi
+        ((counter++))
+        if [[ $counter -eq $match_sha ]]; then
+            report_match_result
+            zero_set
+        fi
+    done
+    if [[ ! counter -eq 0 ]]; then
+        ecl "last group was incomplete, it contained $match_count matches and $mismatch_count mismatches"
+        had_error=1
+    fi
+    [[ $had_error = 1 ]] && exit 1
+    exit 0
+else
+    for arg in "$@"; do
+        t_sha=($(shasum -a $alg "$arg"))
+        # shear non-sha parts & echo
+        echo "$t_sha"
+    done
+fi

@@ -1,0 +1,33 @@
+#!/bin/bash
+$r_ _ pmt
+
+# find in $1
+# expansion of alias _ind="find / -name "
+[[ $# -lt 1 ]] && {
+    echo "_ind ?[from_path] file_name"
+    return
+}
+if [[ -d "$1" ]]; then
+    root_path="$1"
+    shift
+elif [[ -d "${@: -1}" ]]; then
+    root_path="${@: -1}"
+    # remove last arg
+    set -- "$@:1:$(($# - 1))}"
+else
+    if [[ -d '/_' ]]; then
+        root_path=/
+    else # aka windows
+        root_path=/c
+    fi
+fi
+echo "root_path: $root_path"
+while [[ $# -gt 0 ]]; do
+    name="$1"
+    shift
+    ec find "$root_path" -name "$name"
+    find "$root_path" -name "$name"
+    if [[ $# -gt 0 ]]; then
+        yes_or_no "run next query? : $name" || exit
+    fi
+done

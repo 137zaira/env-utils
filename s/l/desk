@@ -1,0 +1,70 @@
+#!/bin/bash
+. $_op/base_rc pmt
+# co /usr/share/applications/xnview.desktop
+desk_name="L_Cut"
+comment="Lossless editing"
+exec_bin="/home/z/bin/lc/losslesscut"
+# examples
+# mime_types="text/x-lcut"
+# icon_name="rygel.png"
+mime_types="text/x-lcut"
+icon_name="rygel.png"
+# # # # After: nautilus -q
+kil_n=0
+## ## ## ## ## ## ## ## ##
+desk_loc="/usr/share/applications"
+short_lower_desk_name=$(ec "$desk_name" | tr "[:upper:]" "[:lower:]" | sed -e 's/_//g')
+if [[ -n "$mime_types" ]]; then
+    mime="
+MimeType=$mime_types"
+else
+    mime=''
+fi
+if [[ -n "$icon_name" ]]; then
+    icon="
+Icon=$icon_name"
+else
+    icon=''
+fi
+
+if [[ -z "$desk_name" ]]; then
+    echo "desk_name is required"
+    exit
+fi
+if [[ -f "$desk_loc/${short_lower_desk_name}.desktop" ]]; then
+    echo "desktop w/desk_name exists, opening/exit"
+    co "$desk_loc/${desk_name}.desktop"
+    exit
+fi
+
+echo "[Desktop Entry]
+Name=$desk_name
+Comment=
+GenericName=$desk_name
+Exec=$exec_bin %F
+Type=Application
+StartupNotify=false
+$icon$mime
+
+Actions=new-empty-window;
+Keywords=$short_lower_desk_name;
+
+[Desktop Action new-empty-window]
+Name=New Empty Window
+Exec=$exec_bin %F
+
+" | sudo tee "/usr/share/applications/${short_lower_desk_name}.desktop"
+
+if [[ $kil_n -eq 1 ]]; then
+    nautilus -q
+fi
+
+exit
+# echo "Icon=/usr/share/icons/Humanity/apps/48/browser.svg"
+# /usr/share/applications/chrom.desktop
+cp "/usr/share/applications/chrom.desktop" /_/u/s/l/arc.desk
+cp "/usr/share/applications/chrom.desktop" /_/u/s/l/xnview.desk
+exit
+
+# /usr/share/icons/Humanity/apps/48/
+# echo "$desk_name" | awk '{print tolower($0)}'

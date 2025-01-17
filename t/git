@@ -1,0 +1,351 @@
+#!/bin/bash
+# git push --set-upstream origin master
+[[ $_debug == import || $_debug -gt 7 ]] && _fb git
+
+# if loaded as a one off
+# [[ $# -eq 0 || ! $1 = _ ]] && {
+#     . "$_t/brc" _ pmt file
+# }
+
+alias wt="git "
+
+ecex() {
+    ec "$@"
+    [[ ! $dry -eq 1 ]] && {
+        "$@"
+    }
+}
+
+export ssh_base="ssh://z@wt.wt:42315/z"
+export ssh_tail=".git"
+
+shallow() {
+    string_is "$(base)" / etc z b c a i ct cl cr cv co cargo tit ty dl
+}
+
+alias wt="git "
+
+wt_set() {
+    remote="$1"
+    wt checkout -b wt
+    wt remote add wt "$remote"
+    wt add .
+    wt commit -m init
+    wt push -u wt wt
+}
+
+# no wt_01_pu probably ever
+alias wt_pu="git push "
+alias wt_pu_="git push -u origin \$(git branch --show-current)"
+
+alias wt_pd="git pull "
+alias wt_st="git stash; git pull "
+alias wt_stp="git stash pop "
+# ignore space+line-ending changes when git diff
+alias wtd="git diff -b --ignore-cr-at-eol "
+alias wt_01_pd="wt config pull.ff only; wt pull 01 master "
+alias wt_01_fe="wt fetch 01 master "
+alias wt_01_f="wt fetch 01 ; "
+alias wt_m="wt merge "
+alias wt_ms="wt merge --squash "
+alias wt_res="git reset --hard HEAD "
+# flush cache
+alias wt_fsh="git rm --cached -r . "
+alias wt_s="git status "
+# wt_cl "ssh://z@wt.wt:42315/z/data.git" data
+wt_cl() {
+    if [[ $# -gt 1 ]]; then
+        # wt clone --depth 1 "$1" "$2"
+        wt clone --depth 1 "$1" "$2"
+        cd "$2"
+
+    else
+        # wt clone --depth 1 "$1"
+        wt clone --depth 1 "$1"
+        # wt clone --recurse-submodules "$1"
+        local git_name="${1##*\/}"
+        git_name="${git_name%\.*}"
+        cd "$git_name"
+    fi
+    echo "git fetch --unshallow"
+    git fetch --unshallow
+    git pull --all
+
+    ec "git submodule update --init --recursive"
+    git submodule update --init --recursive
+    echo "git fetch"
+    git fetch
+
+    # ${test2%*\/}
+}
+alias wt_ra="wt remote add "
+alias wt_re="wt remote "
+# remote detailed list
+alias wt_re_s="wt remote -v show "
+alias wt_ra="wt remote add "
+alias wt_ra_or="wt_ra origin "
+alias wt_ra_01="wt_ra 01 "
+# func wt_re_ora ="wt remote add origin "
+alias wt_rr="wt remote remove "
+alias wt_rr_01="wt_rr 01; "
+alias wt_rr_or="wt_rr origin; "
+# alias wt_re_orr="wt remote remove origin; "
+
+alias wt_re_or="wt remote get-url origin; "
+alias wt_re_01="wt remote get-url 01; "
+alias wt_re_all="wt remote get-url origin; wt remote get-url 01; "
+# TODO:etc what is -all for? din work for this
+alias wt_rl="wt_re_01 wt_re_or "
+
+alias wt_r__="wt rm -f -r "
+alias wt_br="wt branch "
+
+unset wt_br_
+wt_br_() {
+    if [[ $# -ne 1 ]]; then
+        echo -e "Usage:\n\twt_br_ branch_name (branch to delete-singular)"
+        return
+    fi
+    wt branch -D "$1"
+    wt push origin :$1
+}
+alias wt_b="wt branch "
+alias wt_b_="wt_br_ "
+
+alias wt_f="wt fetch "
+
+alias wt_ch_w="wt checkout wurr;"
+alias wt_ch="wt checkout "
+alias wt_ch_="wt checkout -b "
+alias wt_nb="wt_ch_ "
+
+up_gog() {
+    echo "$1" | sudo tee /root/gog
+}
+
+export gogs_user="z"
+export gogs_host="http://wt.wt"
+export gogs_port="62616"
+export gogs_ssh="ssh://z@wt.wt:42315/z"
+
+export gogs_new_url="$gogs_host:$gogs_port/api/v1/admin/users/$gogs_user/repos"
+export gogs_opts_stub="-4 -X POST"
+export gogs_h1="'Content-Type: application/json'"
+export gogs_h2_p1="'Authorization: token"
+export gogs_post_stub='"description":"","private":true, "name":'
+new_gog() {
+    if [[ $# -lt 1 ]]; then
+        ec "Usage: new_gog repo_name1 ..."
+        return
+    fi
+    local GOGS_TOKEN=($(sudo cat /root/gog))
+    GOGS_TOKEN=$GOGS_TOKEN
+    local gogs_h2="$gogs_h2_p1 $GOGS_TOKEN'"
+
+    for repo_name in "$@"; do
+        local post_data="'{${gogs_post_stub}\"${repo_name}\"}'"
+        ec curl $gogs_opts_stub -H "$gogs_h1" -H "$gogs_h2" -d "$post_data" $gogs_new_url
+        eval curl $gogs_opts_stub -H "$gogs_h1" -H "$gogs_h2" -d "$post_data" $gogs_new_url
+        echo ""
+    done
+}
+alias pwd_base="pwd | xargs basename ; "
+
+# git . commit [calm mint]; push
+# set conf if old git: $ git config --global push.default simple
+# do it
+# ^ auto push (-u) tracking is now default
+wt_c() {
+    # if our dir is a base dir refuse (todo a stupidly large commit)
+    if $(shallow); then
+        echo "nah, we are too shallow to wt_c"
+        return
+    fi
+
+    local local_only=0
+    local branch=""
+    # local is_zero_one=0
+    # local zero_one_branch=""
+    local push_args="push"
+    local OPTIND o
+    dry() {
+        [[ 0 -eq 1 ]]
+    }
+    verbose() {
+        [[ 0 -eq 1 ]]
+    }
+    local_only() {
+        [[ 0 -eq 1 ]]
+    }
+    push_args=""
+    while getopts 'nvlu' o; do
+        case "$o" in
+        n)
+            dry() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        v)
+            verbose() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        l)
+            local_only() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        u)
+            push_args="-u origin $(git branch --show-current)"
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    verbose && {
+        echo "opts: $(args_to_string dry verbose local_only branch)"
+        dry && echo "dry" || echo "! dry"
+        [[ -n "$@" ]] && echo "\$@: $@"
+    }
+    # , zero_one_branch=$zero_one_branch, is_zero_one=$is_zero_one"
+    if [ $# -le 0 ]; then
+        # c_message=bump
+        echo "usage: wtc -[l?b?] [comment/_] ?[-b <branch>] \' # ?=optional"
+        # echo "usage: wtc -[l?b?z?] [comment] ?[-b <branch>] \' # ?=optional"
+        return
+    fi
+    c_message="$1"
+    if [[ -n "$branch" ]]; then
+        if [[ ! "$branch" = "$(git branch --show-current)" && ! dry ]]; then
+            echo "wt checkout -b \"$branch\""
+            ! dry && wt checkout -b "$branch"
+        else
+            echo "$branch branch already checked out"
+        fi
+    # elif [[ -n "$zero_one_branch" ]]; then
+    #     wt checkout -b "01/$zero_one_branch"
+    fi
+
+    # return
+    echo "wt add ."
+    dry || wt add .
+    echo "wt commit -m \"$c_message\""
+    dry || wt commit -m "$c_message"
+    ! local_only && ! dry && {
+        wt $push_args
+    }
+}
+alias wt_c_="wt_c -u"
+
+wt_com() {
+    echo "wt add ."
+    wt add .
+    echo "wt commit -m \"quick-commit\""
+    wt commit -m "quick-commit"
+}
+
+wt_cu() {
+    cd "$_u"
+    wt_c "updates on $rig ${sys}"
+}
+# no push commit
+wt_cc() {
+    wt_c -l "$@"
+}
+
+wt_ini() {
+    shallow && {
+        ec2 "the current path is too shallow to init"
+        return
+    }
+    local clear_git=0
+    local new_init=0
+    dry=0
+    for arg in "$@"; do
+        [[ $arg = c ]] && {
+            clear_git=1
+            continue
+        }
+        [[ $arg = n || $arg = d ]] && {
+            dry=1
+            continue
+        }
+    done
+    [[ $clear_git -eq 1 && -d ".git" ]] && ecex rm -rf .git
+
+    if [[ ! -d ".git" ]]; then
+        new_init=1
+        ecex git init
+    fi
+    pdir=$(base)
+    new_gog "$pdir"
+    git init
+    # git checkout main; git branch -D 01/ma_in
+    ecex wt_ra_or $gogs_ssh/$pdir.git
+    ecex git checkout -b main
+
+    ecex codium .
+    yes_or_no "check vscode gitignore & => ready to make first commit?" && {
+        [[ $new_init -eq 1 ]] && {
+            ecex git add .
+            ecex git commit -m "init"
+        }
+        ecex git branch -u 01/main
+        ecex git push -u 01
+        if [[ ! $? -eq 0 ]]; then
+            yes_or_no "the push failed, try rebase? (n to fetch deep or refuse)" && {
+                ecex git rebase -s edit --root
+                ecex git commit --amend --no-edit
+                ecex git push 01
+            } || {
+                yes_or_no "fetch unshallow?" && {
+                    git fetch --unshallow origin
+                    git push 01
+                }
+            }
+        fi
+    }
+    # git rebase --interactive --root
+    # git rebase -s edit --root
+    # git commit --amend --no-edit
+    # git rebase --continue
+    # maybe git commit --amend --no-edit ?
+    # git push 01
+}
+
+wt_res_pd() {
+    if [[ ! -d ./git ]]; then
+        echo "pwd not inside git repo root"
+        return
+    fi
+    wt_res
+    wt_pd
+}
+
+set_all_01() {
+    if [[ ! -d "$1" ]]; then
+        ec "Usage: set_all_01 dir"
+        return
+    fi
+    local parent_dir="$1"
+    shift
+    cd "$parent_dir"
+
+    for a_path in "$parent_dir"/*; do
+        if [[ -d "$a_path" && ! "$a_path" =~ (.*node_modules.*)|(.*dedupe.*)|(.*egui.*) ]]; then
+            cd "$a_path"
+            wt_ini "$#"
+        fi
+    done
+}
+
+return
+export GIT_TRACE_PACKET=1
+export GIT_TRACE=1
+export GIT_CURL_VERBOSE=1
+
+git config --global core.compression 0
+
+export GIT_TRACE_PACKET=0
+export GIT_TRACE=0
+export GIT_CURL_VERBOSE=0

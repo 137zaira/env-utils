@@ -1,0 +1,266 @@
+#!/bin/bash
+# . "$_s/arc/alt"
+# x_ "$_s/arc/alt"
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+# sql_old
+# 1 set n=dry v=verbose s=skip_dirs l=location f=db_file t=db_table
+$r_ _ sql iter_complex file file_util
+. "$_s/arc/functions/common"
+
+###############################################
+# iterates recursively through "$@""
+# if identical path is in db mark entry 1
+# path not in db, => checks sha
+# if sha dne move file to deleted directory to be cleaned separately
+# if sha found + file is at sha-db path col -> add to col logfile
+# if sha exists but assosiative file-path dne move file to db path
+###############################################
+
+#################
+media_found=0
+#################
+
+shopt -s nullglob
+dry() {
+    [[ 0 -eq 1 ]]
+}
+export errata=7
+extra_args=""
+skip_dir_arr=""
+while getopts 'nve:l:f:t:s:' OPTION; do
+    case "$OPTION" in
+    n)
+        dry() {
+            [[ 1 -eq 1 ]]
+        }
+        extra_args="-n $extra_args"
+        ;;
+    v)
+        errata=9
+        extra_args="-v $extra_args"
+        ;;
+    e)
+        errata="$OPTARG"
+        ;;
+    s)
+        skip_dirs="$OPTARG"
+        extra_args="$extra_args -s $skip_dirs"
+        ;;
+    l)
+        location="$OPTARG"
+        ;;
+    f)
+        db_file="$OPTARG"
+        ;;
+    t)
+        db_table="$OPTARG"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+echo "'alt' args init complete skip_dirs: $skip_dirs"
+echo "db_file: $db_file"
+echo "db_table: $db_table"
+
+deleted_dir="$location/resort/deleted"
+[[ ! -d "$deleted_dir" ]] && {
+    mkdir -p "$deleted_dir"
+}
+move_to_deleted() {
+    file_path="$1"
+    mv "$file_path" "$deleted_dir"
+}
+
+##################### <alt_file_fn> #########################
+alt_file_fn() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    # echo "file_path: $file_path"
+    [[ ! "$file_name" == *\.* ]] && return
+    ext=${file_name##*.}
+    ext0=${ext:0:1}
+    ext_=${ext:1}
+    if [[ $ext0 == m ]]; then
+        if [[ ! $m_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an m_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ $ext0 == w ]]; then
+        if [[ ! $w_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an w_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ ! $o_exts == *$ext* ]]; then
+        [[ $errata -gt 8 ]] && {
+            echo "not an o_exts to check ext: ${ext}"
+        }
+        ((other_file_count++))
+        return
+    fi
+    [[ $errata -gt 6 ]] && {
+        echo "file_path: $file_path"
+    }
+    ((checked_file_count++))
+    [[ $errata -gt 4 ]] && [[ $((checked_file_count % 50)) -eq 0 ]] && {
+        ec2 "checked files iterated: $checked_file_count"
+    }
+
+    if [[ $t_subpath = "" ]]; then
+        file_subpath="$file_name"
+    else
+        file_subpath="$t_subpath/$file_name"
+    fi
+    # echo "file_subpath: $file_subpath"
+    count_at_path=$(count_q -i "file_subpath = '$file_subpath'")
+    [[ $? -ne 0 ]] && {
+        echo "count_at_path error: $count_at_path"
+        exit
+    }
+    # echo "count_at_path: $count_at_path"
+    if [[ $count_at_path -gt 0 ]]; then
+        if [[ $count_at_path -gt 1 ]]; then
+            ec_err "multiple entries @path"
+            ec_err "$file_subpath"
+            exit
+        fi
+        update_q $extra_args -s "flip_bit = '1'" -i "file_subpath = '$file_subpath'"
+        ((files_found_at_same++))
+        return
+    fi
+    ec "file_fn no path: \"$file_path\""
+    sha2=$(si "$file_path")
+    count=$(select_q -w "COUNT(*)" -i "sha2 = '$sha2'")
+    [[ $? -ne 0 ]] && {
+        echo "fix error: 'count_where_sha \"$sha2\"'"
+        exit
+    }
+    if [[ $count -eq 0 ]]; then
+        ((files_not_found++))
+        # echo "not_found: $file_name"
+        #############################################
+        mv "$file_path" "$deleted_dir"
+        echo "$sha2|$location|$deleted_dir/$file_name" >>"$log_dir/deleted"
+        #############################################
+        return
+    fi
+    if [[ $count -gt 1 ]]; then
+        ec_err "multiple entries @sha"
+        ec_err "$sha2"
+        exit
+    fi
+    db_subpath=$(select_q -w "file_subpath" -i "sha2 = '$sha2'")
+    [[ $? -ne 0 ]] && {
+        echo "fix error 'select_q  \"$sha2\"'"
+        exit
+    }
+    if [[ -z "$db_subpath" ]]; then
+        ec_err "sha exists: $sha2
+but no path is found in db
+exiting"
+    fi
+    db_path="$location/$db_subpath"
+    ec1 "db_path: $db_path"
+    echo "update_q $extra_args -s \"flip_bit = '1'\" -i \"sha2 = '$sha2'\""
+    dry || {
+        update_q $extra_args -s "flip_bit = '1'" -i "sha2 = '$sha2'"
+    }
+    # if file path from db DNE, update the db entry to this current path
+    if [[ ! -f "$db_path" ]]; then
+        to_dir="${db_path%\/*}"
+        echo "\$to_dir: $to_dir"
+        [[ ! -d "${to_dir}" ]] && mkdir -p "${to_dir}"
+        if [[ ! "$file_path" = "$db_path" ]]; then
+            ((file_updated_path++))
+            echo "mv \"$file_path\" \"$db_path\""
+            mv "$file_path" "$db_path"
+            ((files_updated_path++))
+        fi
+        return
+    fi
+    ((media_path_collision++))
+    # otherwise add a collision to col file if two files/paths exist
+    echo "$sha2|$db_path|$file_path" >>"$log_dir/col"
+}
+#################### </alt_file_fn> #########################
+
+if [[ $as_source -eq 1 ]]; then
+    echo "alt - fns/vars available at prompt"
+    return
+fi
+
+if [[ -n "$primary_tables" ]]; then
+    read -ra p_tabs <<<"$primary_tables"
+else
+    p_tabs=()
+fi
+
+# this is just speeds up the check at start of file function slightly
+# TODO: assosiative/hash is faster?
+echo "p_tabs: ${p_tabs[@]}"
+read -ra extensions <<<$extensions
+m_exts=()
+w_exts=()
+o_exts=()
+for ext in ${extensions[@]}; do
+    ext=$(echo "$ext" | sed -E 's/'\''//g')
+    ext0=${ext:0:1}
+    ext_={ext:1}
+    if [[ $ext0 == m ]]; then
+        m_exts+=(${ext:1})
+    elif [[ $ext0 == w ]]; then
+        w_exts+=(${ext:1})
+    else
+        o_exts+=(${ext})
+    fi
+done
+export m_exts="'${m_exts[@]}'"
+export w_exts="'${w_exts[@]}'"
+export o_exts="'${o_exts[@]}'"
+
+echo "'alt' args init complete"
+if [[ $as_source -eq 1 ]]; then
+    echo "arc/scripts/alt - fns/vars available at prompt"
+    return
+fi
+
+echo "init_run"
+init_run
+
+# first time running on location remove quotes from filenames
+# clean_init && {
+#     echo ": \"location_clean\" \"$location\""
+#     location_clean "$location"
+#     [[ $? -gt 0 ]] && {
+#         echo "location_clean error: $?"
+#         exit
+#     }
+# }
+
+############# go #############
+ec3 "iter_complex ${extra_args} -f alt_file_fn -b dir_before_fn -a dir_after_fn -l \"$location\" -- \"$@\""
+iter_complex ${extra_args} -f alt_file_fn -b dir_before_fn -a dir_after_fn -l "$location" -- "$@"
+
+########### finish ###########
+# move any media not in db to "$location/resort/deleted"
+echo "mv_deleted"
+mv_deleted
+# print logs... etc
+echo "\$_s/arc/scripts/finally"
+$_s/arc/scripts/finally

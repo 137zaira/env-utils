@@ -1,0 +1,64 @@
+#!/bin/bash
+# . $_u/t/sql/select
+
+if [[ $# -lt 1 || ! $1 = _ ]]; then
+    . "$_sql/sql"
+fi
+
+count_q() {
+    print_q() {
+        [[ 1 -eq 0 ]]
+    }
+    local run_alt=0
+    local what=""
+    local if_cond=""
+    local OPTIND extra_args
+    local tables_arr=()
+    local errata=5
+    # echo "select_q $@"
+    while getopts 'pf:t:w:i:' OPTION; do
+        case "$OPTION" in
+        p)
+            print_q() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        w)
+            if [[ $OPTARG = _ ]]; then
+                what="*"
+            else
+                what="$OPTARG"
+            fi
+            ;;
+        i)
+            if [[ $OPTARG = _ ]]; then
+                if_cond=""
+            else
+                if_cond="$OPTARG"
+            fi
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    # check set - location|db_file|db_table
+    # check_all_db_vars || {
+    #     echo "unset db_vars"
+    # }
+    query_p1="SELECT COUNT(*) FROM $db_table"
+    query_p2=""
+    [[ -n "$if_cond" ]] && query_p2="WHERE $if_cond"
+    print_q && {
+        echo "sql \"$query_p1 $query_p2\""
+    }
+    sql "$query_p1 $query_p2"
+}

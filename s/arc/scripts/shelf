@@ -1,0 +1,444 @@
+#!/bin/bash
+# x_ "$_s/arc/main"
+# . "$_s/arc/main"
+# sets main db entries of a pair
+# run shelf_tv
+
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+
+$r_ _ sql iter_complex file file_util
+. "$_s/arc/functions/common"
+
+###############################################
+# check file @ shelf path
+# if exist check if in main db
+# if in main db assure path is in new subdir location
+# if not in main db assure path is in default subdir location
+# if dne in shelf db get sha and check
+###############################################
+
+# shopt -s nullglob
+dry() {
+    [[ 0 -eq 1 ]]
+}
+export errata=5
+extra_args=""
+skip_dir_arr=""
+while getopts 'hncf:t:e:s:' OPTION; do
+    # [[ $OPTION =~ [^nv] ]] && echo "getopts $OPTION, \$OPTARG: $OPTARG"
+    case "$OPTION" in
+    h)
+        echo "Usage:"
+        # echo "req existing_dir, pass with -e"
+        # echo "req unique_dir, pass with -u"
+        echo "set db_file or pass with -f"
+        echo "set db_table or pass with -t"
+        echo "set location or pass with -l"
+        exit
+        ;;
+    n)
+        dry() {
+            [[ 1 -eq 1 ]]
+        }
+        extra_args="-n $extra_args"
+        ;;
+    c)
+        extra_args="-c $extra_args"
+        ;;
+    f)
+        db_file="$OPTARG"
+        ;;
+    t)
+        db_table="$OPTARG"
+        ;;
+    e)
+        errata="$OPTARG"
+        ;;
+    s)
+        skip_dirs="$OPTARG"
+        if [[ -n "$skip_dirs" ]]; then
+            extra_args="$extra_args -s $skip_dirs"
+        fi
+        # echo "skip_dirs: $skip_dirs"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+if [[ -z "$existing_dir" ]]; then
+    echo "req existing_dir, pass with -e or set"
+    exit
+fi
+if [[ -z "$unique_dir" ]]; then
+    echo "req unique_dir, pass with -u or set"
+    exit
+fi
+
+##################### file_fn #########################
+new_file_fn() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    [[ ! "$file_name" == *\.* ]] && return
+    ext=${file_name##*.}
+    ext0=${ext:0:1}
+    ext_=${ext:1}
+    if [[ $ext0 == m ]]; then
+        if [[ ! $m_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an m_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ $ext0 == w ]]; then
+        if [[ ! $w_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an w_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ ! $o_exts == *$ext* ]]; then
+        [[ $errata -gt 8 ]] && {
+            echo "not an o_exts to check ext: ${ext}"
+        }
+        ((other_file_count++))
+        return
+    fi
+    [[ $errata -gt 6 ]] && {
+        echo "file_path: $file_path"
+    }
+    ((checked_file_count++))
+    [[ $errata -gt 4 ]] && [[ $((checked_file_count % 50)) -eq 0 ]] && {
+        ec2 "checked files iterated: $checked_file_count"
+    }
+
+    if [[ $t_subpath = "" ]]; then
+        file_subpath="$file_name"
+    else
+        file_subpath="$t_subpath/$file_name"
+    fi
+
+    effective_path="$unique_base_dir/$file_subpath"
+    [[ $errata -gt 7 ]] && echo "effective_path: $effective_path"
+
+    [[ $errata -gt 7 ]] && {
+        echo "count_q -i \"file_subpath = '$effective_path'\""
+    }
+    count_at_path_on_shelf=$(count_q -i "file_subpath = '$effective_path'")
+    [[ $? -ne 0 ]] && {
+        echo "count_at_path error: $count_at_path_on_shelf"
+        exit
+    }
+
+    [[ $errata -gt 7 ]] && {
+        echo "count_at_path_on_shelf: $count_at_path_on_shelf"
+    }
+    if [[ $count_at_path_on_shelf -gt 0 ]]; then
+        shelf_sha=$(select_q -w "sha2" -i "file_subpath = '$effective_path'")
+        [[ $errata -gt 7 ]] && {
+            echo "shelf_sha: $shelf_sha"
+        }
+        in_db=1
+        at_path=1
+    else
+        shelf_sha=$(si "$file_path")
+        at_path=0
+        count_in_shelf=$(count_q -i "sha2 = '$shelf_sha'")
+        if [[ $count_in_shelf -gt 0 ]]; then
+            in_db=1
+        else
+            in_db=0
+        fi
+    fi
+    [[ $errata -gt 7 ]] && {
+        echo "in_db: $in_db"
+        echo "at_path: $at_path"
+    }
+    count_in_main=$(count_q -t $main_db_table -i "sha2 = '$shelf_sha'")
+    [[ $errata -gt 7 ]] && {
+        echo "##############################"
+        echo "count_in_main: $count_in_main"
+        echo "##############################"
+    }
+    if [[ $count_in_main -gt 0 ]]; then
+        tar_path="${existing_dir}/$file_subpath"
+        if [[ -f "$tar_path" ]]; then
+            echo "colission, existing_dir file exists"
+            echo "tar_path: $tar_path"
+            echo "file_path: $file_path"
+            if [[ $at_path -eq 1 ]]; then
+                echo "$shelf_sha|$file_path|$tar_path" >>"$log_dir/col"
+            else
+                echo "$shelf_sha|$tar_path|$file_path" >>"$log_dir/col"
+            fi
+            exit
+            return
+        fi
+        tar_dir="${tar_path%\/*}"
+        [[ ! -d "$tar_dir" ]] && mkdir -p "$tar_dir"
+        echo "mv \"$file_path\" \"$tar_path\""
+        mv "$file_path" "$tar_path"
+        effective_path="$existing_base_dir/$file_subpath"
+        if [[ $in_db -eq 1 ]]; then
+            echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"file_subpath = '$effective_path', flip_bit = '1'\""
+            update_q -i "sha2 = '$shelf_sha'" -s "file_subpath = '$effective_path', flip_bit = '1'"
+            return
+        fi
+        echo "insert_q -w \"sha2, file_subpath, flip_bit\" -v \"'$shelf_sha', '$effective_path', '1'\""
+        insert_q -w "sha2, file_subpath, flip_bit" -v "'$shelf_sha', '$effective_path', '1'"
+        return
+    fi
+    # file is in correct location
+    if [[ $at_path -eq 1 ]]; then
+        [[ $errata -gt 7 ]] && {
+            echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"flip_bit = '1'\""
+        }
+        update_q -i "sha2 = '$shelf_sha'" -s "flip_bit = '1'"
+        ((files_found_at_same++))
+        return
+    fi
+    if [[ $in_db -eq 1 ]]; then
+        other_effective_subpath=$(select_q -w "file_subpath" -i "sha2 = '$shelf_sha'")
+        # echo "other_effective_subpath: $other_effective_subpath"
+        other_path="$parent_path/$other_effective_subpath"
+        # echo "other_path: $other_path"
+        if [[ -f "$other_path" ]]; then
+            echo "colission, existing_dir file exists"
+            echo "$shelf_sha|$other_path|$file_path" >>"$log_dir/col"
+            return
+        fi
+        echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"file_subpath = '$effective_path', flip_bit = '1'\""
+        update_q -i "sha2 = '$shelf_sha'" -s "file_subpath = '$effective_path', flip_bit = '1'"
+        return
+    fi
+    echo "insert_q -w \"sha2, file_subpath, flip_bit\" -v \"'$shelf_sha', '$effective_path', '1'\""
+    insert_q -w "sha2, file_subpath, flip_bit" -v "'$shelf_sha', '$effective_path', '1'"
+    return
+}
+
+in_storage_file_fn() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    [[ ! "$file_name" == *\.* ]] && return
+    ext=${file_name##*.}
+    ext0=${ext:0:1}
+    ext_=${ext:1}
+    if [[ $ext0 == m ]]; then
+        if [[ ! $m_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an m_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ $ext0 == w ]]; then
+        if [[ ! $w_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an w_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ ! $o_exts == *$ext* ]]; then
+        [[ $errata -gt 8 ]] && {
+            echo "not an o_exts to check ext: ${ext}"
+        }
+        ((other_file_count++))
+        return
+    fi
+    [[ $errata -gt 6 ]] && {
+        echo "file_path: $file_path"
+    }
+    ((dir_file_count++))
+    ((checked_file_count++))
+
+    # [[ $errata -gt 4 ]] && [[ $((media_count % 10)) -eq 0 ]] && {
+    #     [[ $media_count -gt 1500 ]] && {
+    #         ec2 "media_count: $media_count"
+    #     }
+    # }
+
+    [[ $errata -gt 7 ]] && {
+        echo "t_subpath: $t_subpath"
+    }
+    if [[ $t_subpath = "" ]]; then
+        file_subpath="$file_name"
+    else
+        file_subpath="$t_subpath/$file_name"
+    fi
+
+    effective_path="$existing_base_dir/$file_subpath"
+    [[ $errata -gt 7 ]] && {
+        echo "effective_path: $effective_path"
+    }
+    [[ $errata -gt 7 ]] && {
+        echo "count_q -i \"file_subpath = '$effective_path'\""
+    }
+    count_at_path_on_shelf=$(count_q -i "file_subpath = '$effective_path'")
+    [[ $? -ne 0 ]] && {
+        echo "count_at_path error: $count_at_path_on_shelf"
+        exit
+    }
+
+    [[ $errata -gt 7 ]] && {
+        echo "count_at_path_on_shelf: $count_at_path_on_shelf"
+    }
+    if [[ $count_at_path_on_shelf -gt 0 ]]; then
+        shelf_sha=$(select_q -w "sha2" -i "file_subpath = '$effective_path'")
+        [[ $errata -gt 7 ]] && {
+            echo "shelf_sha: $shelf_sha"
+        }
+        in_db=1
+        at_path=1
+    else
+        shelf_sha=$(si "$file_path")
+        at_path=0
+        count_in_shelf=$(count_q -i "sha2 = '$shelf_sha'")
+        if [[ $count_in_shelf -gt 0 ]]; then
+            in_db=1
+        else
+            in_db=0
+        fi
+    fi
+
+    [[ $errata -gt 7 ]] && {
+        echo "in_db: $in_db"
+        echo "at_path: $at_path"
+    }
+
+    count_in_main=$(count_q -t $main_db_table -i "sha2 = '$shelf_sha'")
+    [[ $errata -gt 7 ]] && {
+        echo "##############################"
+        echo "count_in_main: $count_in_main"
+        echo "##############################"
+    }
+    if [[ $count_in_main -eq 0 ]]; then
+        tar_path="${unique_dir}/$file_subpath"
+        if [[ -f "$tar_path" ]]; then
+            echo "colission, unique_dir file exists"
+            if [[ $at_path -eq 1 ]]; then
+                echo "$shelf_sha|$file_path|$tar_path" >>"$log_dir/col"
+            else
+                echo "$shelf_sha|$tar_path|$file_path" >>"$log_dir/col"
+            fi
+            exit
+            return
+        fi
+        tar_dir="${tar_path%\/*}"
+        [[ ! -d "$tar_dir" ]] && mkdir -p "$tar_dir"
+        echo "mv \"$file_path\" \"$tar_path\""
+        mv "$file_path" "$tar_path"
+        effective_path="$unique_base_dir/$file_subpath"
+        move_dir_etc_to="$tar_dir"
+        if [[ $in_db -eq 1 ]]; then
+            [[ $errata -gt 7 ]] && {
+                echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"file_subpath = '$effective_path', flip_bit = '1'\""
+            }
+            update_q -i "sha2 = '$shelf_sha'" -s "file_subpath = '$effective_path', flip_bit = '1'"
+            ((files_updated_path++))
+            return
+        fi
+        [[ $errata -gt 7 ]] && {
+            echo "insert_q -w \"sha2, file_subpath, flip_bit\" -v \"'$shelf_sha', '$effective_path', '1'\""
+        }
+        insert_q -w "sha2, file_subpath, flip_bit" -v "'$shelf_sha', '$effective_path', '1'"
+        ((inserted_file_count++))
+        return
+    fi
+    # file exists
+    if [[ $at_path -eq 1 ]]; then
+        [[ $errata -gt 7 ]] && {
+            echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"flip_bit = '1'\""
+        }
+        update_q -i "sha2 = '$shelf_sha'" -s "flip_bit = '1'"
+        ((files_found_at_same++))
+        return
+    fi
+    if [[ $in_db -eq 1 ]]; then
+        other_effective_subpath=$(select_q -w "file_subpath" -i "sha2 = '$shelf_sha'")
+        other_path="$parent_path/$other_effective_subpath"
+        if [[ -f "$other_path" ]]; then
+            echo "colission, another existing_dir file exists"
+            echo "$shelf_sha|$other_path|$file_path" >>"$log_dir/col"
+            return
+        fi
+        echo "update_q -i \"sha2 = '$shelf_sha'\" -s \"file_subpath = '$effective_path', flip_bit = '1'\""
+        update_q -i "sha2 = '$shelf_sha'" -s "file_subpath = '$effective_path', flip_bit = '1'"
+        ((files_updated_path++))
+        return
+    fi
+    echo "insert_q -w \"sha2, file_subpath, flip_bit\" -v \"'$shelf_sha', '$effective_path', '1'\""
+    insert_q -w "sha2, file_subpath, flip_bit" -v "'$shelf_sha', '$effective_path', '1'"
+    ((inserted_file_count++))
+    return
+}
+
+echo init_run
+init_run
+
+read -ra extensions <<<$extensions
+m_exts=()
+w_exts=()
+o_exts=()
+for ext in ${extensions[@]}; do
+    ext=$(echo "$ext" | sed -E 's/'\''//g')
+    ext0=${ext:0:1}
+    ext_={ext:1}
+    if [[ $ext0 == m ]]; then
+        # echo "m ext: ${ext:1}"
+        m_exts+=(${ext:1})
+    elif [[ $ext0 == w ]]; then
+        # echo "w ext: ${ext:1}"
+        w_exts+=(${ext:1})
+    else
+        # echo "ext: ${ext}"
+        o_exts+=(${ext})
+    fi
+done
+export m_exts="'${m_exts[@]}'"
+export w_exts="'${w_exts[@]}'"
+export o_exts="'${o_exts[@]}'"
+
+if [[ $as_source -eq 1 ]]; then
+    echo "shelf - fns/vars available at prompt"
+    return
+fi
+
+existing_base_dir="${existing_dir##*\/}"
+unique_base_dir="${unique_dir##*\/}"
+parent_path="${existing_dir%\/*}"
+parent_dir="${parent_path##*\/}"
+# echo "existing_dir: $existing_dir"
+# echo "unique_dir: $unique_dir"
+# echo "existing_base_dir: $existing_base_dir"
+# echo "unique_base_dir: $unique_base_dir"
+# echo "parent_path: $parent_path"
+# echo "parent_dir: $parent_dir"
+
+if [[ ! -d "${unique_dir}" ]]; then
+    echo "mkdir \"${unique_dir}\""
+    mkdir "${unique_dir}"
+else
+    export location="$unique_dir"
+    ec3 "iter_complex ${extra_args} -f new_file_fn -b dir_before_fn -a dir_after_fn \"$unique_dir\""
+    iter_complex ${extra_args} -f new_file_fn -b dir_before_fn -a dir_after_fn "$unique_dir"
+fi
+export location="$existing_dir"
+ec3 "iter_complex ${extra_args} -f in_storage_file_fn -b dir_before_fn -a dir_after_fn \"$existing_dir\""
+iter_complex ${extra_args} -f in_storage_file_fn -b dir_before_fn -a dir_after_fn "$existing_dir"
+
+ec2 "'shelf' run completed:\n\t${unique_dir}\n\t$existing_dir"
+$_s/arc/scripts/finally

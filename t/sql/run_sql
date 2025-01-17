@@ -1,0 +1,66 @@
+#!/bin/bash
+# sqlite specific utils
+
+sql() {
+    local errata_stub strip_arg1 strip_arg2
+    local tar_file=""
+    local OPTIND
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # echo "sql_ -f $db_file"
+    # echo "\$\@: $@"
+    errata_stub="usage: sql 'query',"
+    [[ $# -lt 1 ]] && {
+        echo "${errata_stub} [query] must exist"
+        return
+    }
+    if [[ "$1" =~ \.db ]]; then
+        local db_file="$1"
+        shift
+    fi
+    if [[ -z $db_file ]]; then
+        echo "${errata_stub} [db_file] a '.db' must be the first arg if not set in ambient env, [1] return"
+        return
+    fi
+    if [[ ! -f $db_file && ! "$1" =~ CREATE ]]; then
+        echo "! -f \$db_file: ${db_file}"
+        echo "${errata_stub} [db_file]: ${db_file}: file not found"
+        return
+    fi
+    output=$(sqlite3 "$db_file" "$@" 2>&1)
+    error=$?
+    if [[ $error -gt 0 && "$output" =~ .*database\ is\ locked.* ]]; then
+        # echo "locked, retrying"
+        i=0
+        while [[ $error -gt 0 && "$output" =~ .*database\ is\ locked.* ]]; do
+            # echo "locked, retrying"
+            sleep .15
+            output=$(sqlite3 "$db_file" "$@" 2>&1)
+            error=$?
+            if [[ $i -eq 150 ]]; then
+                echo "locked, 150 retries failed, exit"
+                return 1
+            fi
+        done
+    fi
+    # echo "sql \$?: $?" 
+    if [[ $error -gt 0 ]]; then 
+        echo "unknown error: $error, errata: $output" 
+        return $error
+    fi
+    [[ -n "$output" ]] && { 
+        echo "$output"
+    }
+    return 0
+}

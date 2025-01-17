@@ -1,0 +1,61 @@
+#!/bin/bash
+# TODO ?delete
+fix_cur_dir() {
+    if [[ ! -d "$cur_dir" ]]; then
+        echo "fix_cur_dir requires \"cur_dir\" set to an existing dir"
+        return
+    fi
+    while [[ $cur_dir =~ ^(.*)\'(.*)$ ]]; do
+        echo "cur_dir has single quote: \"$cur_dir\"
+attempting update"
+        new_dir_path="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+        mv "$cur_dir" "$new_dir_path" || {
+            ec_err "failed command: 'mv \"$cur_dir\" \"$new_cur_dir\"'
+            exiting"
+            exit
+        }
+        cur_dir="$new_dir_path"
+    done
+}
+
+alter_all_w_dir() {
+    dir_path="$1"
+    echo "alter_all_w_dir path: \"$1\""
+    if [[ $# -eq 0 || ! -d "$dir_path" ]]; then
+        echo "alter_all_w_dir takes a directory arg"
+        return
+    fi
+    # count inside dir
+    dir_count=$(ls -l "$dir_path" | grep - | wc -l)
+    if [[ $dir_count -gt 0 ]]; then
+        return
+    fi
+    echo "processing empty dir: \"${dir_path}\""
+    dir_name="${dir_path##*\/}"
+    if [[ "$dir_name" =~ ^0?_?[wW]_?[[:space:]]?([[:digit:]]+[[:space:]]?_?[tT]?[oO]?[[:space:]]?[[:digit:]]*)$ || "$dir_name" =~ ^_?[wW]_?[[:space:]]?(?[tT]?[oO]?[[:digit:]]+)$ ]]; then
+        file_end_string="${BASH_REMATCH[1]}"
+        if [[ $file_end_string =~ ^_(.*)$ ]]; then
+            file_end_string="${BASH_REMATCH[1]}"
+        fi
+        echo "matched w dir"
+        dir_subpath="${dir_path%\/*}"
+        echo "rm -r \"$dir_path\""
+        rm -r "$dir_path"
+        echo "touch \"$dir_subpath/w_$file_end_string\""
+        touch "$dir_subpath/0w_$file_end_string"
+        fixed=1
+        return
+    fi
+    if [[ "$dir_name" =~ ^[[:space:]]?_?[[:space:]]?[iI][nN][fF][oO][[:space:]]?_?[[:space:]]?(.*)$ ]]; then
+        file_end_string="${BASH_REMATCH[1]}"
+        echo "touch new info: touch \"$dir_subpath/z_info$file_end_string\""
+        echo "rm: rm \"$dir_path\""
+        rm -r "$dir_path"
+        touch "$dir_subpath/z_info_$file_end_string"
+        # echo "skip del of info: \"$file_name\""
+        # ec2 "move info: mv \"$dir_path\" \"$dir_subpath/z_$file_name\""
+        # move info: mv "$dir_path" "$dir_subpath/z_$file_name"
+        fixed=1
+        return
+    fi
+}

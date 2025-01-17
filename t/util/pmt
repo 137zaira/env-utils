@@ -1,0 +1,281 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 8 ]] && _fb prompt
+
+# import with _ to avoid re-import of $_t/com
+[[ $# -lt 1 ]] || [[ ! $1 = _ ]] && {
+    $r_ _ com
+}
+
+ended() {
+    truthy $end 1
+}
+debug_chex() {
+    echo ":::debug_chex:::"
+    echo "\$iter_i: $iter_i"
+    echo "\$n_from: $n_from"
+    echo "\$n_to: $n_to"
+    # echo "\$pass_counter: $pass_counter"
+    echo "\$ended: $ended"
+}
+ch_ex() {
+    ((f++))
+    if [[ $i -lt $f ]]; then
+        [[ 0 -eq 1 ]]
+        return
+    fi
+    [[ 1 -eq 1 ]]
+    return
+}
+pmt_ex() {
+    if [[ $i -lt $f ]]; then
+        ((f++))
+        yes_or_no "continue to next?" && {
+            [[ 0 -eq 1 ]]
+            return
+        } || {
+            [[ 1 -eq 1 ]]
+            return
+        }
+    fi
+    [[ 1 -eq 1 ]]
+    return
+}
+
+# yes_or_no "question" "message_if_no"
+# yes_or_no "continue?" "to restart @ this step use \"script.sh 4\""
+yes_or_no() {
+    local OPTIND
+    inverted=0
+    while getopts 'i' OPTION; do
+        case "$OPTION" in
+        i)
+            inverted=1
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    local prompt="$1"
+    local first=""
+    if [[ $inverted -eq 1 ]]; then
+        if [[ "$prompt" =~ \\n ]]; then
+            first="$prompt"
+            q="y/n [n]: "
+        else
+            q="$prompt y/n [n]: "
+        fi
+        def=n
+    else
+        if [[ "$prompt" =~ \\n ]]; then
+            first="$prompt"
+            q="y/n [y]: "
+        else
+            q="$1 y/n [y]: "
+        fi
+        def=y
+    fi
+    # echo "default: $def"
+    while true; do
+        # </dev/tty specificity here allows read from tty input inside an external `while read line do ... <<<"$data"``
+        [[ -n "$first" ]] && {
+            echo -e "$first"
+        }
+        read -n1 -p "$q" yn </dev/tty
+        yn=${yn:-$def}
+        case $yn in
+        [Yy]*)
+            # echo yes
+            echo ""
+            true
+            return
+            ;;
+        [Nn]*)
+            # echo "$2"
+            echo ""
+            false
+            return
+            ;;
+        esac
+    done
+}
+
+# set f & t to first two ints and set args to the rest
+index_f_t_args() {
+    is_num='^[0-9]+$'
+    args=()
+    unset f t i ended
+    i=0
+    ended=0
+    local flush_rest_args=0
+    for var in $@; do
+        if falsey "$flush_rest_args"; then
+            if [[ $var =~ $is_num ]]; then
+                if [[ ! $f =~ ^[0-9]+$ ]]; then
+                    # echo "f=$var"
+                    f=$var
+                    # iter[f]=$var
+                else
+                    # echo "t=$var"
+                    t="$var"
+                    flush_rest_args=1
+                    # iter[t]=$var
+                fi
+            else
+                args+=("$var")
+            fi
+        else
+            # echo "flushing: $var"
+            args+=("$var")
+        fi
+    done
+    if [[ ! "$f" =~ $is_num ]]; then
+        f=0
+    fi
+    if [[ ! "$t" =~ $is_num ]]; then
+        t=999
+    fi
+    echo "index_f_t_args: \$f: $f, \$t: $t \${args[@}]: ${args[@]}"
+}
+
+prompt_of_three() {
+    local a b c OPTIND
+    while getopts 'a:b:c:' OPTION; do
+        case "$OPTION" in
+        a)
+            a="$OPTARG"
+            ;;
+        b)
+            b="$OPTARG"
+            ;;
+        c)
+            c="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # PS3=
+    q="${1}:"
+    options=("r: $a" "e: $b" "_: $c" "exit")
+    def="_"
+    while true; do
+        echo "#####################################"
+        i=0
+        for choice in "${options[@]}"; do
+            [[ $(($i % 2)) -eq 0 ]] && {
+                ec_opt "$choice"
+            } || {
+                ec_opt_alt "$choice"
+            }
+            ((i++))
+        done
+        #
+        read -n1 -p "$q (r/e/[_]/x): " input_opt </dev/tty
+        input_opt=${input_opt:-$def}
+        # echo -e "\ninput: $input_opt"
+        case $input_opt in
+        [r])
+            choice="$a"
+            return
+            ;;
+        [e])
+            choice="$b"
+            return
+            ;;
+        [_])
+            choice="$c"
+            return
+            ;;
+        [x])
+            exit
+            ;;
+        *)
+            echo -e "\ninvalid option"
+            ;;
+        esac
+    done
+}
+
+prompt_of_two() {
+    if [[ $# -lt 3 ]]; then
+        echo "Usage: 'prompt_of_two "a" "b" "pick one"'"
+    fi
+    opt_one="$1"
+    opt_two="$2"
+    pick_q="$3"
+    def_option="$opt_one"
+    q="$pick_q $opt_one/$opt_two"
+    while true; do
+        # </dev/tty specificity here allows read from tty input inside an external `while read line do ... <<<"$data"``
+        read -p "$q [$def_option]: " pick </dev/tty
+        pick=${pick:-$def_option}
+        case $pick in
+        [$opt_one]*)
+            true
+            return
+            ;;
+        [$opt_two]*)
+            false
+            return
+            ;;
+        esac
+    done
+}
+
+get_input() {
+    if [[ -z $prompt ]] || [[ -z $default ]]; then
+        echo "prompt and default must be set to use $(get_input)"
+        exit
+    fi
+
+    # if [[ ! -z $input ]]; then
+    #     echo "set input="" to test input success after get_input with [[ ! -z \$input ]] "
+    #     exit
+    # fi
+    local _input
+    while read -p "$* $prompt" _input; do
+        # default
+        _input=${_input:-$default}
+        if [[ $i_type = "path" ]]; then
+            case $_input in
+            [_])
+                __in= _
+                break
+                ;;
+            [/]*) # if starts with a slash (a path)
+                __in="$_input"
+                break
+                ;;
+            *)
+                echo "input should start with / or be _ "
+                ;;
+            esac
+        elif [[ $i_type = "digit_plus" ]]; then
+            case $_input in
+            [\d]*) # if starts with a digit
+                echo "$_input"
+                break
+                ;;
+            *)
+                echo "input should start with a number "
+                ;;
+            esac
+        else
+            echo "unknown/unsupported i_type: $i_type"
+            exit
+        fi
+    done </dev/tty
+    # Set a success result
+    # input=$_input
+    # cleanup for any following get_input
+    # unset prompt default
+}
+
+[[ $_debug == import || $_debug -gt 8 ]] && _fe prompt

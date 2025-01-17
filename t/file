@@ -1,0 +1,846 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 7 ]] && _fb file
+# if [[ $# -lt 1 ]]; then
+#     . $_t/util/pmt
+# fi
+
+alias func="declare -f "
+alias bn="basename "
+alias dn="dirname "
+alias zow="sudo chown -R z:z "
+alias x_="sudo chmod -R +x "
+alias so_="sudo su "
+alias _ln="ln -s "
+alias e_stab="so gedit /etc/fstab & "
+alias _nd="mkdir -p "
+alias mnt_a="sudo mount -a "
+alias mnt_ra="sudo mount --all -o remount "
+alias cp_="cp --force "
+# alias eroot_rc="so gedit /root/.bashrc & "
+# edit shortcuts for our three rc configs and current user .bashrc
+# using ed alias to quik edit rc scripts
+alias e_op="co ${_op} "     # open zen rc # nonsensical inversion
+alias e_hrc="co ~/.bashrc " # works for root also
+# alias dn__="/dev/null "
+
+# zip quick, medium, hard
+alias arc1="7z a -t7z -m0=lzma -mx=1 -mfb=64 -md=32m -ms=on "
+alias arc5="7z a -t7z -m0=lzma -mx=5 -mfb=64 -md=32m -ms=on "
+alias arc7="7z a -t7z -m0=lzma -mx=7 -mfb=64 -md=32m -ms=on "
+alias arc="7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on "
+# extract
+alias arcx="7z x "
+
+print_size() {
+    local wip=$(stat -c "%s" "$1")
+    wip=$((wip / 1000000))
+    # if [[ $wip -gt 1000 ]]; then
+    mb=$(($wip % 1000))
+    mb=$(($mb / 10))
+    mb=$(printf '%02d' $mb)
+    tb=$(($wip / 1000))
+    tb=$(printf '%02d' $tb)
+    echo "${tb}.${mb}T"
+    # else
+    #     wip=$(printf '%03d' $wip)
+    #     echo "${wip}MB"
+    # fi
+}
+
+export film_exts=("mp4" "mkv" "webm" "mov" "avi" "m4v" "mpg" "wmv" "vob" "wmv" "ogm" "m4a")
+is_video() {
+    ext="${1##*\.}"
+    if [[ -z "$ext" ]]; then
+        [[ 1 = 0 ]]
+        return
+    fi
+    for ext in ${film_exts[@]}; do
+        if [[ "$1" =~ \."$ext"$ ]]; then
+            [[ 1 -eq 1 ]]
+            return
+        fi
+    done
+    [[ 1 -eq 0 ]]
+}
+
+export audio_exts=("wav" "flac" "mp3" "aac")
+is_audio() {
+    ext="${1##*\.}"
+    if [[ -z "$ext" ]]; then
+        [[ 1 = 0 ]]
+        return
+    fi
+    for ext in ${audio_exts[@]}; do
+        if [[ "$1" =~ \."$ext"$ ]]; then
+            [[ 1 -eq 1 ]]
+            return
+        fi
+    done
+    [[ 1 -eq 0 ]]
+}
+
+export large_exts=("zip" "tar" "rar" "7z" "iso")
+large_exts+=(${film_exts[@]})
+large_exts+=(${audio_exts[@]})
+is_large_type() {
+    ext="${1##*\.}"
+    if [[ -z "$ext" ]]; then
+        [[ 1 = 0 ]]
+        return
+    fi
+    # is_video "$1" && {
+    #     [[ 1 -eq 1 ]]
+    #     return
+    # }
+    for ext in ${film_exts[@]}; do
+        if [[ "$1" =~ \."$ext"$ ]]; then
+            [[ 1 = 1 ]]
+            return
+        fi
+    done
+    for ext in ${large_exts[@]}; do
+        if [[ "$1" =~ \."$ext"$ ]]; then
+            [[ 1 = 1 ]]
+            return
+        fi
+    done
+    [[ 1 = 0 ]]
+}
+export image_exts=("png" "jpg" "jpeg" "webp" "bmp" "svg" "gif" "ico")
+is_image() {
+    ext="${1##*\.}"
+    if [[ -z "$ext" ]]; then
+        [[ 1 = 0 ]]
+        return
+    fi
+    for ext in ${image_exts[@]}; do
+        if [[ "$1" =~ \."$ext"$ ]]; then
+            [[ 1 = 1 ]]
+            return
+        fi
+    done
+    [[ 1 = 0 ]]
+}
+
+########################################################
+############## <update all arg filepaths> ##############
+prepend() {
+    add="$1"
+    shift
+    for arg in "$@"; do
+        if [[ -f "$arg" || -d "$arg" ]]; then
+            file_name="${arg##*\/}"
+            file_parent_path="${arg%\/*}"
+            mv "$arg" "$file_parent_path/${add}$file_name"
+            # }
+        fi
+    done
+}
+
+postfix() {
+    add="$1"
+    shift
+    for arg in "$@"; do
+        if [[ -f "$arg" || -d "$arg" ]]; then
+            file_name="${arg##*\/}"
+            file_ext="${arg##*\.}"
+            file_name="${file_name%\.*}"
+            file_parent_path="${arg%\/*}"
+            mv "$arg" "$file_parent_path/$file_name${add}.${file_ext}"
+        fi
+    done
+}
+
+make_up() {
+    token="${token^^}"
+    shift
+    for file_path in "$@"; do
+        if [[ -f "$file_path" || -d "$file_path" ]]; then
+            file_name="${file_path##*\/}"
+            if [[ "${file_path}" =~ \/ ]]; then
+                file_parent_path="${file_path%\/*}/"
+            else
+                file_parent_path=""
+            fi
+            if [[ "${file_name^^}" =~ ^(.*)${token}(.*)$ ]]; then
+                updated_path="${file_parent_path}${BASH_REMATCH[1]}${token}${BASH_REMATCH[2]}"
+                if [[ ! "$updated_path" = "$file_path" ]]; then
+                    mv "${file_path}" "${updated_path}_"
+                    mv "${updated_path}_" "${updated_path}"
+                fi
+            fi
+        fi
+    done
+}
+
+make_low() {
+    token="${token,,}"
+    shift
+    for file_path in "$@"; do
+        if [[ -f "$file_path" || -d "$file_path" ]]; then
+            file_name="${file_path##*\/}"
+            if [[ "${file_path}" =~ \/ ]]; then
+                file_parent_path="${file_path%\/*}/"
+            else
+                file_parent_path=""
+            fi
+            if [[ "${file_name,,}" =~ ^(.*)${token}(.*)$ ]]; then
+                updated_path="${file_parent_path}${BASH_REMATCH[1]}${token}${BASH_REMATCH[2]}"
+                if [[ ! "$updated_path" = "$file_path" ]]; then
+                    mv "${file_path}" "${updated_path}_"
+                    mv "${updated_path}_" "${updated_path}"
+                fi
+            fi
+        fi
+    done
+}
+
+strip_leading() {
+    strip_symbols="$1"
+    shift
+    for arg in "$@"; do
+        if [[ -f "$arg" || -d "$arg" ]]; then
+            file_name="${arg##*\/}"
+            file_parent_path="${arg%\/*}"
+            [[ "$file_name" =~ ^$strip_symbols(.*)$ ]] && {
+                updated="${BASH_REMATCH[1]}"
+                # echo "strip_leading $from_symbols '$file_name' => ${BASH_REMATCH[1]}"
+                mv "$arg" "$file_parent_path/$updated"
+            }
+        fi
+    done
+}
+
+strip_trailing() {
+    strip_symbols="$1"
+    shift
+    for arg in "$@"; do
+        if [[ -f "$arg" ]]; then
+            file_name="${arg##*\/}"
+            file_parent_path="${arg%\/*}"
+            [[ "$file_name" =~ ^(.*)${strip_symbols}\.([a-z]{2,3}4?)$ ]] && {
+                updated="${BASH_REMATCH[1]}"
+                ext="${BASH_REMATCH[2]}"
+                # echo "strip_leading $from_symbols '$file_name' => ${BASH_REMATCH[1]}"
+                mv "$arg" "$file_parent_path/$updated.$ext"
+            }
+        fi
+    done
+}
+
+# clean_strip [-]0000 = "a.. [-]0000 b..." => "a.. b.."
+strip() {
+    [[ $# -lt 1 ]] && {
+        echo "Usage: strip pretext"
+        return
+    }
+    match_str="$1"
+    for arg in "$@"; do
+        [[ "$arg" =~ ^(.*)$match_str(.*)$ ]] && {
+            file_name="${file_name##*\/}"
+            file_parent_path="${file_name%\/*}"
+            updated="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+            [[ ! "$file_name" = "$updated" ]] && {
+                echo "file_name: $file_name"
+                echo "updated__: $updated"
+                mv "$arg" "$file_parent_path/$updated"
+            }
+        }
+    done
+}
+############# </update all arg filepaths> ##############
+########################################################
+
+copy_all_m() {
+    match="$1"
+    location="$(pwd)"
+    if [[ $# -gt 1 ]]; then
+        target="$2"
+    else
+        target="0_0"
+    fi
+    mkdir "$target"
+    for file_path in "$location"/$match; do
+        echo "cp -r \"$file_path\"/* ./$target"
+        cp -r "$file_path"/* ./$target
+    done
+}
+
+to_() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: to_ file1 file2, at least 1 file"
+        return
+    fi
+    # dest=${@: -1}
+    # set -- "${@:1:$#-1}"
+    sudo touch "$@"
+    # for arg in "$@"; do
+    # arg_name="${arg##*\/}"
+    sudo chown -R z:z "$@"
+    # done
+}
+
+# to_b "$_one/util/cln_dir"
+to_b() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: to_b file_path ?file_path2"
+        return
+    fi
+    for arg in "$@"; do
+        if [[ -f "$arg" ]]; then
+            echo "file exists, just +x & then codium opening"
+        else
+            touch "$arg"
+            echo '#!/bin/bash' | tee "$arg"
+            echo "# . \"$arg\"" | tee -a "$arg"
+        fi
+        sudo chmod +x "$arg"
+        codium "$arg"
+    done
+}
+
+cpf() {
+    cp --force "$@"
+}
+cpf_() {
+    sudo cp --force "$@"
+}
+del_line() {
+    if [[ $# -lt 2 ]]; then
+        _ec "del_line requires two args: del_line \$1=file \$2=line_num"
+        return
+    fi
+    sed -i "${2}d" $1
+}
+get_line() {
+    if [[ $# -lt 2 ]]; then
+        _ec "get_line requires two args: del_line \$1=file \$2=line_num"
+        return
+    fi
+    sed -n "${line}p" $bg_q
+}
+mnt() {
+    if [[ $1 = _ ]]; then
+        com="umount"
+        shift
+    else
+        com="mount"
+    fi
+    if [[ $# -gt 1 ]]; then
+        for dev in $@; do
+            e_e sudo $com UUID="$dev"
+        done
+    else
+        e_e sudo $com UUID="$1"
+    fi
+}
+
+# cat with line numbers
+alias catt="cat -n "
+alias grep_c="grep "
+alias grep="grep --color=never "
+
+# unalias l ls lt lu la li >/dev/null
+l_l() {
+    ls --color=auto "$@"
+}
+# gets only dirs. if no arg, operates ls at pwd as intended
+ld() {
+    if [[ $# -gt 1 ]]; then
+        ls -AF1 "$1" | grep "[/]$"
+    else
+        ls -AF1 | grep "[/]$"
+    fi
+}
+# TODO REDO -F has * appended?
+# gets only files. if no arg, operates ls at pwd as intended
+lf() {
+    ls -A1 --file-type $1 | grep "[^/]$"
+}
+# gets only files, unsorted. if no arg, operates ls at pwd as intended
+# lfu() {
+#     ls -UA1 --file-type $1 | grep "[^/]$"
+# }
+# save raw ls as l to alias over ls with prefered $ ls -1A
+# alias l_l="ls "
+alias l="l_l -1AU "
+# alias ls="l_l -1A "
+alias lt="l_l -CU "
+alias lu="l_l -UA1"
+alias la='l_l -UA'
+# extra [i]nfo
+alias li="l_l -hgGAl "
+
+# um $(pwd) ?
+base() {
+    [[ $# -lt 1 ]] && {
+        pwd | xargs basename
+    } || {
+        echo "$@" | xargs basename
+    }
+}
+
+# replace $2 with $3 in file=$1
+f_rep() {
+    fpath="$1"
+    repl="$2"
+    with="$3"
+    if [[ ! -f "$1" ]]; then
+        ec "file \$1 : $1 - DNE"
+        return
+    fi
+    if [[ -z "$2" ]]; then
+        ec "replace string target: empty/DNE"
+        return
+    fi
+    tnp_set
+    fname=$(basename $1)
+    tnp_tar=~/"tnp/$fname_$(lil_r)"
+    mv "$1" "$tnp_tar"
+    cat "$tnp_tar" | sed -E "s/$2/$3/g" >"$1"
+    # cat "$1" | sed -E "s/$2/$3/g"
+}
+
+zln() {
+    if [[ ! -f "$1" ]]; then
+        ec "file \$1: $1 not found -> nash"
+        return
+    fi
+    if [[ -f "$2" ]]; then
+        ec "file \$2: exists -> nash"
+        return
+    fi
+    e_e sudo ln -s "$1" "$2"
+    e_e zow "$2"
+}
+
+# func sea => cat $1 | grep $2
+alias h_cl="history -c; >~/.bash_history "
+
+# dir_mv "/e/z4/0_m/t/wip/g051" 0 1 2 3 4
+dir_mv() {
+    base_dir="$1"
+    to_dir="0__9"
+    from_basedir="1"
+    from_subdir="10"
+    shift
+    for item in $@; do
+        echo "mv \"$base_dir/${from_basedir}/$from_subdir/$item\"/* \"$base_dir/$from_basedir/$to_dir\""
+        mv "$base_dir/${from_basedir}/$from_subdir/$item"/* "$base_dir/$from_basedir/$to_dir"
+        echo "mv \"$base_dir/${from_basedir}_out/$from_subdir/$item\"/* \"$base_dir/${from_basedir}_out/$to_dir\""
+        mv "$base_dir/${from_basedir}_out/$from_subdir/$item"/* "$base_dir/${from_basedir}_out/$to_dir"
+    done
+}
+
+dir_div() {
+    width=55
+    if [[ $# -gt 0 ]]; then
+        if [[ ! -d "$1" ]]; then
+            echo "arg 1: '$1' is not a dir"
+            exit
+        fi
+        cd "$1"
+    fi
+    i=0
+    j=0
+    # "$pre"/
+    for a_path in *; do
+        # only if filetype with extension
+        if ! [[ -f "$a_path" && "$a_path" =~ .*\..* ]]; then
+            continue
+        fi
+        # if [[ $i -eq 0 ]] && [[ ! -d "${pre}/${j}" ]]; then
+        if [[ $i -eq 0 ]] && [[ ! -d "${j}" ]]; then
+            # mkdir "${pre}/${j}"
+            mkdir "${j}"
+        fi
+        fullname="${a_path##*\/}"
+        mv "$fullname" "${j}"
+        # mv "$fullname" "${pre}/${j}"
+        # ext="${fullname##*\.}"
+        # fname="${fullname%\.*}"
+
+        # stat=$(stat -c %s "$a_path")
+        # [[ $stat -gt 40000 ]] && {
+        #     printf "%02d %07d $fname\n" $i $stat
+        #     # echo "$stat $a_path"
+        #     # mv "$a_path" "${a_path}.mp4"
+        #     ((i++))
+        # }
+        ((i++))
+        if [[ $i -eq $width ]]; then
+            ((j++))
+            i=0
+        fi
+        # fi
+    done
+}
+
+m_clean() {
+    [[ $# -gt 0 ]] && {
+        paths=("$@")
+    } || {
+        paths=("$(pwd)")
+    }
+    shopt -s dotglob
+    max_depth=10
+    max_cleaner_size=10000
+    for a_path in ${paths[@]}; do
+        # first 3 mac
+        root_removals=(".Spotlight-V100" "\$RECYCLE.BIN" "System Volume Information" ".TemporaryItems" ".fseventsd")
+        root_removals+=(".Trashes")
+        root_removals+=(".Trash-998" ".Trash-999" ".Trash-1000")
+        for root_removal in "${root_removals[@]}"; do
+            full_path="$a_path/$root_removal"
+            if [[ -d "$full_path" ]]; then
+                e_e rm -rf "$full_path" >/dev/null
+            fi
+        done
+        depth=0
+        # shopt -s globstar
+        recurse_remove "$a_path"
+    done
+    shopt -u dotglob
+}
+
+fover_() {
+    shopt -s dotglob
+    local this_src_dir="$1"
+    local this_des_dir="$2"
+    local this_src_dir_name="${this_src_dir##*\/}"
+    if [[ "$this_src_dir_name" = ".git" || "$this_src_dir_name" = clean ]]; then
+        echo "\$this_src_dir_name: $this_src_dir_name skipping"
+        return
+    fi
+
+    cd "$this_src_dir"
+    for sub_path in $this_src_dir/*; do
+        # for sub_path in $this_src_dir/{.[!.]*,*}; do
+        # echo "\$sub_path: $sub_path_name"
+        sub_path_name="${sub_path##*\/}"
+
+        # sub_path="$this_src_dir/$sub_path_name"
+        # sub_des_path="$this_des_dir/$sub_path_name"
+        # # sub_path_name="${sub_path##*\/}"
+        if [[ -d "$sub_path" ]]; then
+            if [[ ! -d "$this_des_dir/$sub_path_name" ]]; then
+                e_e _nd "$this_des_dir/$sub_path_name"
+            fi
+            __flux_over "$sub_path" "$this_des_dir/$sub_path_name"
+        elif [[ -f "$sub_path" ]]; then
+            # f_name="${sub_path##*\/}"
+            e_e cp --force "$sub_path" "$this_des_dir/$sub_path_name"
+        else
+            ec "what is this path?: $sub_path"
+        fi
+    done
+}
+
+# cp_if /_/u_ /_/u
+cp_if() {
+    errata="cp_if \$1=dir_path \$2=tar_path:"
+    if [[ $# -lt 2 ]]; then
+        echo "$errata requres two args"
+        return
+    fi
+    if [[ ! -d "$1" ]]; then
+        errata="$errata \$1='$1' is not a dir"
+    fi
+    if [[ ! -d "$2" ]]; then
+        if [[ ${#errata} -gt 30 ]]; then
+            errata="$errata &"
+        fi
+        errata="$errata \$2='$2' is not a dir"
+    fi
+    # echo "test"
+    if [[ ${#errata} -gt 30 ]]; then
+        echo "$errata"
+        return
+    fi
+    __flux_over "$1" "$2"
+}
+
+# nd => make dir -p w/cd $@
+nd() {
+    if [[ $# -lt 1 ]]; then
+        echo "cnd req a dir path to nd:cd target, $no_param"
+        return
+    fi
+    mkdir -p "$1"
+    cd "$1"
+}
+# move and give z ownership
+mv_() {
+    if [[ $# -lt 2 ]]; then
+        echo "mv_ needs two args mv_ [from] [to]"
+        return
+    fi
+    mv "$1" "$2"
+    zow "$2"
+}
+
+clean_file_name() {
+    t_file_name=$(echo "$t_file_name" | sed -e 's/&/x/g' | sed -e 's/\ /_/g')
+    # replaces all weird symbols
+    while [[ "$t_file_name" =~ (.*)([^a-zA-Z0-9\-_\]{1,4})(.*) ]]; do
+        t_file_name="${BASH_REMATCH[1]}_${BASH_REMATCH[3]}"
+    done
+    # replace multiple symbol/space in sequence with _
+    while [[ "$t_file_name" =~ (.*)([\-_\ ]){2,4}(.*) ]]; do
+        t_file_name="${BASH_REMATCH[1]}_${BASH_REMATCH[3]}"
+    done
+    # strip all leading symbol/space
+    while [[ "$t_file_name" =~ ^([\-_\ ]{1,4})(.*)$ ]]; do
+        t_file_name="${BASH_REMATCH[2]}"
+    done
+    # strip all trailing symbol/space
+    while [[ "$t_file_name" =~ ^(.*)([\-_\ ]{1,4})$ ]]; do
+        t_file_name="${BASH_REMATCH[1]}"
+    done
+    # if t_file_name is only separator set it empty
+    last_file_name="$t_file_name"
+    [[ "$t_file_name" =~ ^([\-_\ ]*)$ ]] && {
+        t_file_name=""
+    }
+}
+
+link() {
+    if [[ -z "$2" ]]; then
+        # Link-checking mode.
+        if windows; then
+            fsutil reparsepoint query "$1" >/dev/null
+        else
+            [[ -L "$1" ]]
+        fi
+        return
+    else
+        # Link-creation mode.
+        if windows; then
+            # Windows needs to be told if it's a directory or not. Infer that.
+            # Also: note that we convert `/` to `\`. In this case it's necessary.
+            if [[ -d "$2" ]]; then
+                comma='mklink /j /D "'$1'" "'${2//\//\\}'"'
+
+            else
+                (comma='mklink /j "'$1'" "'${2//\//\\}'"')
+            fi
+            cmd <<<"$comma" >/dev/null
+        else
+            # backwards...
+            ln -s "$2" "$1"
+        fi
+    fi
+} # digest.md [03]
+# link our configs to edit where-ever we like
+alias ln_u="link u C://e/u; ec -e '\n\nu/' | tee -a  .gitignore >/dev/null; "
+
+to() {
+    if [[ $# -lt 1 ]]; then
+        ec ":\$ to /.../file_path ?z|?root ?no=>(no editor open) :: requires file_path"
+        return
+    fi
+    if [[ -d "$1" ]]; then
+        ec "target: '$1' is a dir; (return)"
+        co $1
+        return
+    fi
+    if [[ -f "$1" ]]; then
+        ec "target: '$1' exists; (return)"
+        co $1
+        return
+    fi
+
+    local fpath dir file_path no_open
+    fpath="$1"
+    shift
+    dir=${fpath%/*}
+    # create dir if in a dir &/which dne
+    if [[ ! -z "$dir" ]]; then
+        if [[ -d "$dir" ]]; then
+            echo "dir exists: '$dir'"
+        else
+            echo nd "$dir"
+        fi
+    fi
+    if [[ $fpath =~ \.sh || ! $fpath =~ \. ]]; then
+        echo -e "#!/bin/bash\n" >>$fpath
+        sudo chmod +x $fpath
+    else
+        touch $fpath
+    fi
+
+    if [[ $fpath =~ \.sh || ! $fpath =~ \. ]]; then
+        if [[ ! -f "$fpath" ]]; then
+            touch "$fpath"
+            echo -e '#!/bin/bash\n' | tee "$fpath"
+        fi
+        sudo chmod +x $fpath
+    else
+        touch $fpath
+    fi
+
+    # options driven
+    no_open=""
+    for arg in $@; do
+        if [[ $arg == no ]]; then
+            no_open=no
+        elif [[ -d /home/$arg || $arg == root ]]; then
+            sudo chown $arg:$arg $fpath
+        fi
+    done
+    if [[ -z "$no_open" ]]; then
+        co $fpath
+    fi
+}
+to_="sudo to "
+
+return
+
+########### section WIP ############
+alias sea_e="env | grep " # env | grep LD_
+alias sea_rc="cat $_{rc}s_rc | grep "
+alias sea_func="cat $_{rc}s_func | grep "
+alias sea_al="alias | grep "
+alias sea_s_al="cat $_{rc}s_al | grep "
+
+exfat_rename() {
+    if [[ $# -lt 3 || ! $1 =~ ^\/dev\/ ]]; then
+        echo "USAGE: exfat_rename /dev/sdd [1-9] new-name"
+        return
+    fi
+    if [[ ! $2 =~ ^[[:digit:]]$ ]]; then
+        echo "exfat_rename error: arg2 must be a single digit"
+        return
+    fi
+    exfatlabel $1$2 "$3"
+    sgdisk -c=$2:"$3" $1
+}
+ext4_rename() {
+    if [[ $# -lt 3 || ! $1 =~ ^\/dev\/ ]]; then
+        echo "USAGE: exfat_rename /dev/sdd [1-9] new-name"
+        return
+    fi
+    if [[ ! $2 =~ ^[[:digit:]]$ ]]; then
+        echo "exfat_rename error: arg2 must be a single digit"
+        return
+    fi
+    sgdisk -c=$2:"$3" $1
+    echo "dry/untested: mke2fs -L $1$2"
+}
+
+is_g() {
+    g_in_parent="${1%\/*}/../g"
+    if [[ ! -d "$g_in_parent" ]]; then
+        mkdir -p "$g_in_parent"
+    fi
+    for path in "$@"; do
+        file_name="${path##*\/}"
+        file_ext="${file_name##*\.}"
+        tar_path="$g_in_parent/${file_name%\.*}_$(rnd2).$file_ext"
+        i=0
+        while [[ -f "$tar_path" ]]; do
+            if [[ $i -gt 100 ]]; then
+                echo "failed to move file_name to '$g_in_parent/${file_name%\.*}_xx.$file_ext'"
+            fi
+            tar_path="$g_in_parent/${file_name%\.*}_$(rnd2).$file_ext}"
+            ((i++))
+        done
+        mv "$path" "$tar_path"
+    done
+}
+
+set_bin() {
+    f_name="${arg##*\/}"
+    if [[ -f /usr/local/bin/$f_name ]]; then
+        yes_or_no "file exists, overwrite?" && {
+            echo "sudo cp --force '$@' /usr/local/bin"
+            sudo cp --force "$@" /usr/local/bin
+        } || {
+            return
+        }
+    else
+        echo "sudo cp '$@' /usr/local/bin"
+        sudo cp "$@" /usr/local/bin
+    fi
+    for arg in "$@"; do
+        echo "sudo chmod +x '/usr/local/bin/$f_name'"
+        sudo chmod +x "/usr/local/bin/$f_name"
+    done
+}
+
+return
+
+# alias g_="xargs -t -p grep \"/c/Program Files/nodejs/node\"; "
+# alias gg_="xargs grep \"/usr/bin/bash\""
+# is_num='^[0-9]+$'
+
+# get_first_match() {
+#     local arr=($(echo -e "$pros" | sed -n "/$1/{p;q;}"))
+#     # echo "result: ${arr[0]}"
+#     fm="${arr[0]}"
+# }
+# print sorted PATH var with labeled & counted dupes
+# alias pri_path="ec $PATH | sed 's/(.*)\((.*)\)(.*)/\\2/p' | sed 's/:/\n/g' | sort " #| uniq -c
+## | uniq -c  can't deal with NTFS () parens
+# print a function with name $1
+# windows?
+# windows() { [[ -n "$WINDIR" ]]; }
+# alias grep="grep --color=never "
+
+# Always print files -1: one per line -A: all but no implied [.] [..]
+# -F/--classify: append indicator (one of */=>@|) to entries (trailing /)
+# unalias ls l ll lf
+# alias l="ls "
+# alias ls="ls -1A "
+# # -C: list entries by columns
+# alias l="ls -CF "
+# # print files -l: w/more details
+# alias ll="ls -AlF "
+# alias lf="ls -F "
+# alias lsd="ls -d "
+# alias lsg="ls --group-directories-first --file-type "
+# -1 list one file per line.  Avoid '\n' with -q or -b
+# -d, --directory list directories themselves, not their contents
+#  -F, --classify             append indicator (one of */=>@|) to entries
+#       --file-type            likewise, except do not append '*'
+#       --format=WORD          across -x, commas -m, horizontal -x, long -l,
+#                                single-column -1, verbose -l, vertical -C
+#       --full-time            like -l --time-style=full-iso
+#   -g                         like -l, but do not list owner
+#  --group-directories-first
+#                              group directories before files;
+#                                can be augmented with a --sort option, but any
+#                                use of --sort=none (-U) disables grouping
+# (m_~)
+
+# rotate out contents of ~/lit & re-bin #!/bin/bash
+# rot() {
+#     if [[ $# -lt 1 ]]; then
+#         #echo "rot rotates a files contents to \${1}_\$(rnd 9), $no_param"
+#         local tar=~/lit
+
+#     else
+#         local tar="$1"
+#     fi
+#     if [[ ! -f $tar ]] && [[ $# -lt 2 || ! $2 =~ ^_$ ]]; then
+#         if [[ $# -lt 2 || ! $2 =~ ^_$ ]]; then
+#             touch "$1"
+#         else
+#             if ! [[ $tar =~ ^/ || $tar =~ ^~ ]]; then
+#                 $tar="$tar at path: $(pwd)"
+#             fi
+#             echo "file: $1 dne, tail with '_' to create "
+#         fi
+#         return
+#     fi
+
+#     if [[ -f "$tar" ]]; then
+#         if [[ -f "${tar}_cl" ]]; then
+#             # skip #!/bin/bash
+#             cat ${tar} | awk "FNR>1{print \$0 >> \"${tar}_cl\" }"
+#         else
+#             cat ${tar} >>"${tar}_cl"
+#         fi
+#     fi
+#     #echo -e "#!/bin/bash\n">"$tar"
+# }

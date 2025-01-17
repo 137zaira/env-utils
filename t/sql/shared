@@ -1,0 +1,298 @@
+#!/bin/bash
+# x_ "$_sql/shared"
+# . "$_sql/shared"
+# log_dir="/_/files/dat/logs"
+
+# $r_ _ run_sql
+# if [[ $# -lt 1 || ! $1 = _ ]]; then
+#     . "$_sql/sql"
+# fi
+
+check_table_exists() {
+    local extra_args=""
+    local OPTIND
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            extra_args="-f $OPTARG"
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # if [[ $# -gt 0 ]]; then
+    #     if [[ -n "$db_table" ]]; then
+    #         echo "args are not needed if -t not set tar_table"
+    #         # false
+    #         return
+    #     fi
+    #     local db_table=$1
+    # fi
+
+    # # $_sql/shared
+    # check_all_db_vars || {
+    #     echo
+    #     [[ 1 = 0 ]]
+    #     return
+    # }
+    output=$(sql $extra_args "
+SELECT name FROM sqlite_master
+WHERE type='table'
+AND name='$db_table'
+")
+    if [[ $? -ne 0 ]]; then
+        echo "table lookup sql error, $output"
+        return 1
+    fi
+    if [[ $output = $db_table ]]; then
+        echo found
+        return 0
+    fi
+}
+
+init_media_table() {
+    db_dir="${db_file%\/*}"
+    # echo "db_dir: $db_dir"
+    [[ ! -d "$db_dir" ]] && {
+        mkdir -p "$db_dir"
+    }
+    # echo "CREATE db_table: $db_table"
+    sql "CREATE TABLE IF NOT EXISTS $db_table(
+        sha2 VARCHAR PRIMARY KEY,
+        file_subpath VARCHAR,
+        o_file_name VARCHAR,
+        flip_bit INTEGER
+)"
+    errata=test
+    return 4
+    # echo "//CREATE db_table: $db_table"
+}
+
+init_unify_table() {
+    local OPTIND
+    echo "f: init_simple_table"
+    while getopts 'f:t:uls' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    echo "init_unify_table: $db_table"
+    db_dir="${db_file%\/*}"
+    # echo "db_dir: $db_dir"
+    [[ ! -d "$db_dir" ]] && {
+        mkdir -p "$db_dir"
+    }
+    # echo "CREATE db_table: $db_table"
+    sql "CREATE TABLE IF NOT EXISTS $db_table(
+        sha2 VARCHAR PRIMARY KEY,
+        table_name VARCHAR,
+        flip_bit INTEGER
+)"
+}
+init_location_table() {
+    local OPTIND
+    echo "f: init_location_table"
+    while getopts 'f:t:uls' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    db_dir="${db_file%\/*}"
+    # echo "db_dir: $db_dir"
+    [[ ! -d "$db_dir" ]] && {
+        mkdir -p "$db_dir"
+    }
+    # echo "CREATE db_table: $db_table"
+    sql "CREATE TABLE IF NOT EXISTS $db_table(
+        table_name VARCHAR PRIMARY KEY,
+        path VARCHAR
+)"
+}
+
+init_simple_table() {
+    local OPTIND
+    echo "f: init_simple_table"
+    while getopts 'f:t:uls' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    db_dir="${db_file%\/*}"
+    # echo "db_dir: $db_dir"
+    [[ ! -d "$db_dir" ]] && {
+        mkdir -p "$db_dir"
+    }
+    # echo "CREATE db_table: $db_table"
+    sql "CREATE TABLE IF NOT EXISTS $db_table(
+        sha2 VARCHAR PRIMARY KEY)"
+    # echo "//CREATE db_table: $db_table"
+}
+
+check_all_db_vars() {
+    if [[ -z "$db_file" ]]; then
+        ec_err "no \$db_file var is set, fatal"
+        exit
+    fi
+    if [[ -z "$db_table" ]]; then
+        ec_err "no \$db_table var is set, fatal"
+        exit
+    fi
+    # if [[ -z "$location" ]]; then
+    #     ec_err "no \$location var is set, fatal"
+    #     exit
+    # fi
+}
+
+#echo "check_init_db_table init"
+check_init_db_table() {
+    local OPTIND
+    unify_type() {
+        [[ 1 -eq 0 ]]
+    }
+    location_type() {
+        [[ 1 -eq 0 ]]
+    }
+    simple_type() {
+        [[ 1 -eq 0 ]]
+    }
+    while getopts 'f:t:uls' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        u)
+            unify_type() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        l)
+            location_type() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        s)
+            simple_type() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    output=$(check_table_exists -t $db_table)
+    error=$?
+    [[ $? -gt 0 ]] && {
+        echo "output: $output, error: $?, output: $output"
+        return $error
+    }
+    if [[ $output = found ]]; then
+        return 0
+    fi
+    echo "creating table: $db_table"
+    unify_type && {
+        output=$(check_table_exists -t $db_table)
+        error=$?
+        [[ $? -gt 0 ]] && {
+            echo "output: $output, error: $?, output: $output"
+            return $error
+        }
+        if [[ ! $output = found ]]; then
+            output=$(init_unify_table -t "$db_table")
+            error=$?
+            echo "output init_unify_table: $output"
+            return $error
+        fi
+        return 0
+    }
+    location_type && {
+        output=$(init_location_table -t "$db_table")
+        return $?
+    }
+    simple_type && {
+        echo "init_simple_table -t \"$db_table\""
+        output=$(init_simple_table -t "$db_table")
+        echo "init_simple_table output: $output"
+        return $?
+    }
+    init_media_table -t $db_table
+    error=$?
+    [[ $? -gt 0 ]] && {
+        echo "init_media_table output: $output, error: $error, output: $output"
+        return $error
+    }
+    return 0
+}
+
+check_init_simple_table() {
+    local OPTIND
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # $_sql/shared
+    errata=$(check_all_db_vars)
+    [[ -n "$errata" ]] && {
+        ec "$errata"
+        return 1
+    }
+    echo "check_table_exists"
+    check_table_exists -t "$db_table" || {
+        errata=$(init_simple_table "$db_table")
+        [[ -n "$errata" ]] && {
+            ec "$errata"
+        }
+    }
+}

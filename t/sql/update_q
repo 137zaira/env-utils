@@ -1,0 +1,114 @@
+#!/bin/bash
+# . $_u/t/sql/update
+# update_q ${extra_args} -s "flip_bit = '0'" -i _
+# updates all -i _, set flip_bit to 0
+
+# li
+$r_ _ run_sql
+
+update_q() {
+    print_q() {
+        [[ 1 -eq 0 ]]
+    }
+    local run_alt=0
+    local what=""
+    local if_cond=""
+    local OPTIND extra_args
+    local tables_arr=()
+    local errata=5
+    # echo "select_complex $@"
+    while getopts 'pae:t:f:s:i:' OPTION; do
+        case "$OPTION" in
+        p)
+            print_q() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        a)
+            run_alt=1
+            ;;
+        e)
+            errata="$OPTARG"
+            # no errata in sql "..."
+            # extra_args="-e $errata $extra_args"
+            ;;
+        t)
+            [[ $errata -gt 7 ]] && {
+                echo "local db_table=\"$OPTARG\""
+            }
+            local db_table="$OPTARG"
+            ;;
+        f)
+            [[ $errata -gt 7 ]] && {
+                echo "extra_args=\"$extra_args -f $OPTARG\""
+            }
+            extra_args="$extra_args -f $OPTARG"
+            ;;
+        s)
+            set_what="$OPTARG"
+            ;;
+        i)
+            if_cond="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # check set - location|db_file|db_table
+    check_all_db_vars || {
+        echo "unset db_vars"
+        return
+    }
+
+    if [[ -n $set_what ]]; then
+        query_p1="UPDATE"
+    else
+        ec_err "\: update_complex called without -s (set what?)"
+        exit
+    fi
+    if [[ -n $set_what ]]; then
+        query_p2="
+SET $set_what"
+    else
+        ec_err "Update called without -s (set what?)"
+        exit
+    fi
+    if [[ -n $if_cond ]]; then
+        if [[ $if_cond = _ ]]; then
+            query_p3=""
+        else
+            query_p3="
+WHERE $if_cond"
+        fi
+    else
+        ec_err "Update called without -i (set which?)"
+        exit
+    fi
+    print_q && {
+        echo "sql $extra_args \"$$query_p1 $db_table$query_p2$query_p3\""
+    }
+    output=$(sql $extra_args "$query_p1 $db_table$query_p2$query_p3")
+    error=$?
+    [[ $error -gt 0 ]] && echo "update_q error: $error, '$output'"
+    return $error
+    ##################################################
+    for table in "${multiple_db_tables[@]}"; do
+        result=$(sql $extra_args "$query_p1 FROM $table
+$query_p2")
+        [[ $? -gt 0 ]] && {
+            ec_err "sql failed ($?):$extra_args \"$query_p1 FROM $table$query_p2\""
+            exit
+        }
+        if [[ -n "$result" && ! "$result" = "0" ]]; then
+            echo "$result"
+            return
+        fi
+    done
+    # echo last 0 if one exists
+    [[ -n result ]] && echo "$result"
+    # fi
+}

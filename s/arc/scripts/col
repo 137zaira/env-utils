@@ -1,0 +1,70 @@
+#!/bin/bash
+# . "$_u/s/arc/col"
+
+$r_ _ pmt sql
+
+vid_count=0
+already_done_count=0
+just_done_count=0
+
+if [[ -z "$db_file" ]]; then
+    echo "db_file path is required"
+    exit
+elif [[ -z "$db_table" ]]; then
+    echo "db_table is required"
+    exit
+fi
+
+update_path_for_sha() {
+    sha2="$1"
+    new_path="$2"
+    echo "update_q -s \"file_subpath = '$new_path'\" -i \"sha2 = '$sha2'\""
+    update_q -s "file_subpath = '$new_path'" -i "sha2 = '$sha2'"
+}
+
+delete_collisions() {
+    file_path="$1"
+    mv -f "$log_dir/col" "$log_dir/col_temp"
+    while read -r line || [[ -n "$line" ]]; do
+        ((vid_count++))
+        deserialize_to_arr "$line"
+
+        sha2="${t_arr[0]}"
+        db_path="${t_arr[1]}"
+        file_path="${t_arr[2]}"
+        #echo "db_path:   $db_path"
+        #echo "file_path: $file_path"
+        if [[ -f "${db_path}" && -f "${file_path}" ]]; then
+            choice=""
+            prompt_of_three -a "$db_path" -b "$file_path" -c "nothing" "delete which?"
+            echo -e "\nchoice: $choice"
+            if [[ $choice = nothing ]]; then
+                #echo "$line" >>"$log_dir/col"
+                continue
+            fi
+
+            if [[ "$choice" = "$db_path" ]]; then
+                #echo -e "\nchoice=db_path"
+                rm "$db_path"
+                update_path_for_sha $sha2 "$file_path"
+                continue
+            fi
+            if [[ "$choice" = "$file_path" ]]; then
+                #echo -e "\nchoice=file_path"
+                rm "$file_path"
+                continue
+            fi
+            echo "option not found"
+            exit
+            ((just_done_count++))
+        else
+            echo "not a collision, skipping."
+            echo "$line" >>"$log_dir/recheck_col"
+            ((already_done_count++))
+        fi
+    done <"$file_path"
+}
+
+>"$log_dir/recheck_col"
+delete_collisions "$log_dir/col_temp"
+

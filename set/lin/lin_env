@@ -1,0 +1,56 @@
+#!/bin/bash
+# x_ /_/u/set/lin_env
+# /_/u/set/lin_env
+
+# WIP
+
+4_r() {
+    echo "$(($RANDOM % 1000))"
+}
+
+declare -A vars
+declare -A found
+
+vars[rig]=vox
+vars[sys]=lin
+vars[user]=z
+vars[r_]=". /_/u/t/brc"
+vars[com_]=". /_/u/t/com"
+vars[env_]=". /etc/environment"
+
+vars[_d]=/_
+vars[_b]=/_/b
+vars[_u]=/_/u
+vars[_t]=/_/u/t
+vars[_s]=/_/u/s
+vars[_sql]=/_/u/t/sql
+vars[_cl]=/_/cl
+vars[_ct]=/_/ct
+vars[_f]=/_/files
+vars[_conf]=/_/conf
+
+init_env() {
+    target=/etc/environment
+    bk=/etc/environment_$(4_r)
+    sudo mv -f /etc/environment $bk
+    while read -r line || [[ -n "$line" ]]; do
+        if [[ $line =~ ^([a-zA-Z0-9_]+)\= ]]; then
+            var="${BASH_REMATCH[1]}"
+            if [[ -n "${vars[$var]}" && -z "${found[$var]}" ]]; then
+                found[$var]=1
+                echo "$var=\"${vars[$var]}\"" | sudo tee -a $target
+                continue
+            fi # else echo below
+        fi
+        echo "$line" | sudo tee -a $target
+    done <"$bk"
+    for var in "${!vars[@]}"; do
+        [[ ! found[$var] -eq 1 ]] && {
+            echo "$var=\"${vars[$var]}\"" | sudo tee -a $target
+        }
+    done
+    sudo rm /etc/env
+    sudo ln $target /etc/env
+}
+init_env
+echo "logout & login for changes to take effect"

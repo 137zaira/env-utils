@@ -1,0 +1,12 @@
+#!/bin/bash
+# x_ $_u/set/lin
+# bash $_u/set/lin
+x_() {
+    sudo chmod +x "$@"
+}
+
+x_ "$_t/util/welcome"
+
+git config --global core.autocrlf true
+
+apt install dos2unix

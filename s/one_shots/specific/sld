@@ -1,0 +1,141 @@
+#!/bin/bash
+shopt -s expand_aliases
+# this creates a xnview slideshow file and starts it
+# pass -h [height] -w [width] ?[name_of_output_file] [file_path/dir_path] ?[file_path/dir_path] ...
+
+# sld -w 3813 -h 2160 /media/z/tap/vert
+# sld -w 1600 -h 1600 /media/z/tap/hore
+
+$r_ _ com
+
+###############
+sld_dir="$_h/ten/sld"
+RandomOrder=0
+while getopts 'h:w:n' OPTION; do
+    case "$OPTION" in
+    h)
+        height="$OPTARG"
+        ;;
+    w)
+        width="$OPTARG"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+dir_paths=()
+dir_add() {
+    if [[ "$1" =~ \/$ ]]; then
+        dir_path="${1%*/}"
+    else
+        dir_path="$1"
+    fi
+    echo "dir_add: f:$dir_path"
+    dir_paths+=("$dir_path")
+    if [[ "$dir" =~ .*alt_drive.* ]]; then
+        sld_dir="/media/z/alt_drive/9_dat/ten"
+    fi
+    for fpath in $dir_path/*; do
+        if [[ -d "$fpath" ]]; then
+            dir_add "$fpath"
+        fi
+    done
+}
+tag=""
+first_dir_name=""
+for arg in "$@"; do
+    if [[ -d "$arg" ]]; then
+        if [[ -z "$first_dir_name" ]]; then
+            first_dir_name="${arg##*\/}"
+        fi
+        dir_add "$arg"
+    elif [[ ! -f "$arg" ]]; then
+        if [[ ! $arg =~ .*\/.* && -z "$tag" ]]; then
+            echo "arg: $arg - not understood as a file or dir, will use as tag"
+            tag="$arg"
+        else
+            echo "arg: $arg - not understood as a file or dir and contains a path symbol or tag is already set (exit)"
+            exit 1
+        fi
+    fi
+done
+
+echo "dir_paths: ${dir_paths[@]}"
+
+get_files() {
+    for dir_path in "${dir_paths[@]}"; do
+        echo "~ for fpath in $dir_path/*; ~"
+        for fpath in $dir_path/*; do
+            if [[ -f "$fpath" ]]; then
+                echo "$fpath" >>"$stg"
+            fi
+        done
+    done
+}
+
+if [[ -z "$tag" ]]; then
+    if [[ -z "$first_dir_name" ]]; then
+        echo "a tag arg for output is required"
+        exit 1
+    fi
+    tag="$first_dir_name"
+fi
+
+echo "height: $height"
+echo "width: $width"
+###################
+stg="$sld_dir/stage.txt"
+stg_srt="$sld_dir/stage_presort.txt"
+stg_srted="$sld_dir/stage_sorted.txt"
+out_f="$sld_dir/out_"
+
+_nd "$sld_dir"
+>"$stg"
+>"$stg_srt"
+>"$stg_srted"
+>"$out_f"
+out_f="${sld_dir}/$tag.sld"
+>"$out_f"
+get_files
+
+while read -r line || [[ -n $line ]]; do
+    echo "${line##*/}/$line" >>"$stg_srt"
+done <"$stg"
+# sort "$stg_srt" >>"$stg_srted"
+stage_prepped="$stg_srt"
+# stage_prepped="$stg_srted"
+
+echo "# Slide Show Sequence v2
+OnTop = 1
+FullScreen = 0
+Stretch = 1
+ShowInfo = 0
+TitleBar = 0
+UseTimer = 1
+Timer = 9
+Loop = 1
+RandomOrder = $RandomOrder
+WinHeight = $height
+WinWidth = $width
+" >$out_f
+cat "$stage_prepped" | sed 's/[^/]*\///' | xargs -I '{}' -d '\n' echo "\"{}\"" >>$out_f
+
+echo "xnview \"$out_f\" &"
+xnview "$out_f" &
+
+exit
+
+echo "
+BackgroundColor = 0 0 0 255
+TextColor = 255 255 255 255
+UseTextBackColor = 0
+TextPosition = 0
+TextBackColor = 128 128 128 255
+Font = Sans Serif,9,-1,5,50,0,0,0,0,0
+EffectDuration = 2000
+Effects = 1 
+"

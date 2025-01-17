@@ -1,0 +1,18 @@
+#!/bin/bash
+# /_/u/s/one_shots/specific/dna
+$r_ _ iter
+# removes all -0000 from files in cur dir
+
+for iter in *; do
+    if [[ $iter =~ ^(.*)\.([a-zA-Z]{3,4})$ ]]; then
+        fname="${BASH_REMATCH[1]}"
+        extname="${BASH_REMATCH[2]}"
+        if [[ "$fname" =~ ^(.*)\-0000$ ]]; then
+            # echo "$iter"
+            echo "${BASH_REMATCH[1]}"
+            # echo "$extname"
+            mv "$iter" "${BASH_REMATCH[1]}.$extname"
+        fi
+
+    fi
+done

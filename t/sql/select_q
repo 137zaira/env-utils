@@ -1,0 +1,132 @@
+#!/bin/bash
+# . $_u/t/sql/select
+
+if [[ $# -lt 1 || ! $1 = _ ]]; then
+    . "$_sql/sql"
+fi
+
+select_q() {
+    print_q() {
+        [[ 1 -eq 0 ]]
+    }
+    local run_alt=0
+    local what=""
+    local if_cond=""
+    local OPTIND extra_args
+    local tables_arr=()
+    local errata=5
+    # echo "select_q $@"
+    while getopts 'paef:t:w:i:' OPTION; do
+        case "$OPTION" in
+        p)
+            print_q() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        a)
+            run_alt=1
+            ;;
+        e)
+            errata=$OPTARG
+            ;;
+        f)
+            extra_args="$extra_args -f $OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        w)
+            if [[ $OPTARG = _ ]]; then
+                what="*"
+            else
+                what="$OPTARG"
+            fi
+            ;;
+        i)
+            if [[ $OPTARG = _ ]]; then
+                if_cond=""
+            else
+                if_cond="$OPTARG"
+            fi
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # check set - location|db_file|db_table
+    check_all_db_vars || {
+        echo "unset db_vars"
+    }
+
+    # if [[ $run_alt -eq 0 && -z "$db_table" ]]; then
+    #     echo "pass: -t db_table, or set '\$db_table' in env"
+    #     return
+    # fi
+    query_p1="SELECT"
+    if [[ -n $what ]]; then
+        query_p1="$query_p1 $what FROM"
+    else
+        query_p1="$query_p1 * FROM"
+    fi
+    query_p2=""
+    [[ -n "$if_cond" ]] && query_p2="
+WHERE $if_cond"
+
+    if [[ $run_alt -eq 0 ]]; then
+        print_q && {
+            echo "sql $extra_args \"$query_p1 $db_table$query_p2\""
+        }
+        sql $extra_args "$query_p1 $db_table$query_p2"
+        return
+    fi
+    # else $run_alt -eq 1
+    if [[ "${#alt_db_tables[@]}" -gt 0 ]]; then
+        result=""
+        found_table="z0"
+        for table in "${alt_db_tables[@]}"; do
+            query="$query_p1 $table
+$query_p2"
+            # echo "table: $table"
+            # echo "sql $extra_args \"$query\""
+            print_q && {
+                echo "sql $extra_args \"$query\""
+            }
+            result=$(sql $extra_args "$query")
+            check_error="$?"
+            if [[ $check_error -ne 0 ]]; then
+                echo "sql error: '$check_error', result: '$result'"
+                exit
+            fi
+
+            if [[ -n $result ]]; then
+                echo "$table|$result"
+                return 0
+            fi
+        done
+    else
+        ec_err "alt_db_tables variable is unset cannot '-a' run alt checks "
+        # return 1
+        exit
+    fi
+    exit
+    # if [[ ${#multiple_db_tables[@]} -gt 0 ]]; then
+    for table in "${multiple_db_tables[@]}"; do
+        result=$(sql $extra_args "$query_p1 FROM $table
+$query_p2")
+        [[ $? -gt 0 ]] && {
+            ec_err "sql failed ($?):$extra_args \"$query_p1 FROM $table$query_p2\""
+            exit
+        }
+        if [[ -n "$result" && ! "$result" = "0" ]]; then
+            echo "$result"
+            return
+        fi
+    done
+    # echo last 0 if one exists
+    [[ -n result ]] && echo "$result"
+    # fi
+}

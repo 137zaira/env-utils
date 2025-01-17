@@ -1,0 +1,219 @@
+#!/bin/bash
+# . $_t/sql
+# sqlite specific utils
+
+# import our 'sql' fn
+$r_ _ run_sql shared delete_q insert_q select_q count_q update_q
+
+sql_errata=/tmp/sql_errata
+
+count_where_i_from_one_of_t() {
+    local OPTIND tar_tables db_table extra_args
+    tar_tables=()
+    while getopts 'f:t:w:i:' OPTION; do
+        case "$OPTION" in
+        f)
+            extra_args="$extra_args -f $OPTARG"
+            ;;
+        t)
+            local tar_tables_serial="$OPTARG"
+            line="$1"
+            oIFS="$IFS"
+            IFS='|'
+            local tar_tables=($tar_tables_serial)
+            IFS="$oIFS"
+            ;;
+        i)
+            local if_cond="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # $_sql/shared
+    check_all_db_vars
+
+    # if [[ $# -eq 0 ]]; then
+    #     echo "check_placed $sha2, requires one parameter"
+    #     return
+    # fi
+    if [[ -z "$if_cond" ]]; then
+        echo "check_placed -i \"sha2 = 'ereticl.,'\", requires a '-i ...' condition"
+        return
+    fi
+    if [[ "${#tar_tables[@]}" -eq 0 ]]; then
+        echo "Pass tar_tables with -t 'table1|t2|...'"
+        return
+    fi
+    # media_tables=film|tv
+    # media_tables=ty|x_sourced
+    found=0
+    for table in "${tar_tables}"; do
+        # echo ": count=\$(select_complex $extra_args -t $db_table -w \"COUNT(*)\" -i \"$if_cond\")"
+        count=$(select_complex $extra_args -t $table -w "COUNT(*)" -i "$if_cond")
+        # echo "count: $count"
+        # return
+        if [[ $count =~ ^[1-9]$ ]]; then
+            # echo "found in table: $db_table"
+            found=1
+            found_table=$db_table
+            return
+            # else
+            # echo "not   in table: $db_table"
+        else
+            echo "error in sql: $count"
+            return
+        fi
+    done
+}
+
+list_tables() {
+    local OPTIND
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # check_all_db_vars
+    [[ -z "$db_file" ]] && {
+        echo "db_file must be set"
+    }
+
+    sql ".tables"
+}
+
+count_where_sha() {
+    local OPTIND
+    while getopts 'nvf:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # $_sql/shared
+    check_all_db_vars || return 1
+
+    sql -f "$db_file" "
+SELECT COUNT(*) FROM $db_table
+WHERE sha2 = '$1'
+"
+}
+
+count_all() {
+    local OPTIND
+    while getopts 'nvf:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # $_sql/shared
+    check_all_db_vars || return 1
+
+    sql -f "$db_file" "
+SELECT COUNT(*) FROM $db_table
+"
+}
+
+drop_table() {
+    local OPTIND
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # $_sql/shared
+    check_all_db_vars || return 1
+
+    if [[ $# -gt 0 ]]; then
+        for arg in "$@"; do
+            echo "sql \"DROP TABLE $arg\""
+            sql "DROP TABLE $arg"
+        done
+        return
+    fi
+    if [[ -n "$db_file" && -n "$db_table" ]]; then
+        # yes_or_no "no arg, drop_table. DROP '$db_table'" && {
+        echo "sql \"DROP TABLE $db_table\""
+        sql "DROP TABLE $db_table"
+        # }
+    fi
+}
+
+rename_table() {
+    local OPTIND
+    local db_table=""
+    while getopts 'f:t:' OPTION; do
+        case "$OPTION" in
+        f)
+            local db_file="$OPTARG"
+            ;;
+        t)
+            db_table="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    new_name="$1"
+    [[ $# -eq 0 || -z "$db_table" ]] && {
+        echo "Usage: rename_table -t ?table_name new_name"
+        return 1
+    }
+    check_all_db_vars || return 1
+
+    if [[ -n "$db_file" && -n "$db_table" ]]; then
+        # echo "sql \"ALTER TABLE '$db_table' RENAME TO '$new_name'\""
+        sql "ALTER TABLE '$db_table' RENAME TO '$new_name'"
+    fi
+}

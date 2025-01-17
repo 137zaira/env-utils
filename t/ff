@@ -1,0 +1,575 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 8 ]] && echo "${f_1}  <sys_win/rc> ${f_2}"
+# TODO Clean
+to_win() {
+    local path_no_leading_slash="${1#*\/}"
+    #win_path=$(
+    #echo "############################################"
+    echo "$path_no_leading_slash" | sed -E "s/^[cC]/C:/g" | sed -E "s/\//\\\\/g" 2>/dev/null
+    #echo "############################################"
+    #) 2>/dev/null
+}
+
+path() {
+    if [[ $sys = win ]]; then
+        to_win "$1"
+    else
+        echo "$1"
+    fi
+}
+
+ffm() {
+    t_path=$(path "$1")
+    shift
+    if [[ $sys = win ]]; then
+        "/c/_/b/bin/ffmpeg.exe" -i "$t_path" "$@"
+    else
+        "/_/b/bin/ffmpeg" -i "$t_path" "$@"
+    fi
+}
+ffp() {
+    # for a_path in "$@"; do
+    t_path=$(path "$1")
+    shift
+    if [[ $sys = win ]]; then
+        "/c/_/b/bin/ffprobe.exe" -i "$t_path" "$@"
+    else
+        "/_/b/bin/ffprobe" -i "$t_path" "$@"
+    fi
+}
+
+# 4320 vs 5760
+# 2880 vs 2160
+ffp_r() {
+    for a_path in "$@"; do
+        w_h=$(ffp "$a_path" -v error -select_streams v -show_entries stream=width,height -of default=noprint_wrappers=1)
+        # echo "$w_h"
+        res_width=""
+        res_height=""
+        saved_IFS="$IFS"
+        while IFS= read -r line; do
+            if [[ $line =~ width\=([0-9]+) ]]; then
+                res_width="${BASH_REMATCH[1]}"
+            elif [[ $line =~ ^height\=([0-9]+) ]]; then
+                res_height="${BASH_REMATCH[1]}"
+            fi
+        done <<<"$w_h"
+        echo "w: ${res_width}, h: ${res_height}"
+    done
+}
+
+ffp_w() {
+    for a_path in "$@"; do
+        # ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 "$@"
+        output=$(ffp "$a_path" -v error -select_streams v -show_entries stream=width -of default=noprint_wrappers=1:nokey=1)
+        # width="${output##*=}"
+        echo "$output"
+    done
+}
+ffp_h() {
+    for a_path in "$@"; do
+        fname="${a_path##\/}"
+        # ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 "$@"
+        output=$(ffp "$a_path" -v error -select_streams v -show_entries stream=height -of default=noprint_wrappers=1:nokey=1)
+        # height="${output##*=}"
+        echo "$output"
+    done
+}
+
+#  : format=duration : format_tags : stream_tags
+ffp_bd() {
+    for a_path in "$@"; do
+        audio=$(ffp "$a_path" -select_streams a:0 -v error -show_streams -show_entries "stream=bits_per_raw_sample" -of default=noprint_wrappers=1)
+        while IFS= read -r line; do
+            # echo "line: $line"
+            [[ "$line" =~ bits_per_raw_sample\=(.*)$ ]] && {
+                echo "${BASH_REMATCH[1]}"
+                break
+            }
+        done <<<"$audio"
+    done
+}
+
+ffp_fmt() {
+    for a_path in "$@"; do
+        ffp "$a_path" -v quiet -show_entries stream=sample_fmt -select_streams a:0 -of default=noprint_wrappers=1:nokey=1
+    done
+}
+
+# ffp_fps() {
+#     for a_path in "$@"; do
+#         ext=${a_path##*\.}
+#         # ish
+#         # frames=$(ffp "$a_path" -v quiet -select_streams v -count_frames -show_entries stream=nb_read_frames -print_format csv="p=0")
+#         # echo "frames: $frames"
+#         # duration=$(ffp "$a_path" -show_entries format=duration -v quiet -of csv="p=0")
+#         if [[ "${ext,,}" =~ mkv ]]; then
+#             duration=$(ffp "$a_path" -v quiet -select_streams v -show_entries format=duration -of compact=p=0:nk=1)
+#         else
+#             duration=$(ffp "$a_path" -v quiet -select_streams v -show_entries stream=duration -of compact=p=0:nk=1)
+#         fi
+#         echo "duration: $duration"
+#         # echo "BEGIN {printf \"%.02f\n\", $frames / $duration}"
+#         # awk "BEGIN {printf \"%.02f\n\", $frames / $duration}"
+#     done
+# }
+
+# bitrate
+ffp_br() {
+    for a_path in "$@"; do
+        ext=${a_path##*\.}
+        size=$(ffp "$a_path" -v quiet -select_streams v -show_entries packet=size -of compact=p=0:nk=1 | awk '{s+=$1} END {print s}')
+        if [[ "${ext,,}" =~ mkv ]]; then
+            duration=$(ffp "$a_path" -v quiet -select_streams v -show_entries format=duration -of compact=p=0:nk=1)
+        else
+            duration=$(ffp "$a_path" -v quiet -select_streams v -show_entries stream=duration -of compact=p=0:nk=1)
+        fi
+        echo "size: $size"
+        echo "duration: $duration"
+        awk "BEGIN {printf \"%.0fKB/s\n\", ($size/$duration)/1000 }"
+    done
+}
+
+ffm_shrink() {
+    for a_path in "$@"; do
+        name="${a_path##*\/}"
+        title="${name%\.*}"
+        echo "name: $name"
+        echo "title: $title"
+        ffm "$a_path" -v quiet -vf scale=1440:-2,setsar=1:1 -c:v libx264 -c:a copy "${title}_shrink.mp4"
+    done
+}
+
+export default_audio=wav
+ff_a() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: ff_a 'file_path'"
+        return
+    fi
+    for a_path in "$@"; do
+        # t_path=$(path "$a_path")
+        name="${a_path##*\/}"
+        src_path_and_name="${a_path%\.*}"
+        out_path="$src_path_and_name.$default_audio"
+        echo "ffm \"$a_path\" -vn -acodec copy \"$a_path\""
+        ffm "$a_path" -vn -acodec copy "$a_path"
+    done
+}
+
+# video no-audio (only video stream)
+ff_na() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: ff_na 'file_path'"
+        return
+    fi
+    for a_path in "$@"; do
+        dir_path="${a_path%\/*}"
+        ext="${a_path##*\.}"
+        name="${a_path##*\/}"
+        name="${name%\.*}"
+        echo "ffmpeg -i \"$a_path\" -map 0:v -c:v copy \"$dir_path/\""
+        ffm -i "$a_path" -map 0:v -c:v copy "$dir_path/${name}_na.${ext}"
+    done
+}
+
+ff_add_sub() {
+    video_path=""
+    srt_path=""
+    for arg in "$@"; do
+        if [[ $arg =~ \.mp4 || $arg =~ \.mkv ]]; then
+            video_path="$arg"
+        elif [[ $arg =~ \.srt ]]; then
+            srt_path=$(path "$arg")
+        fi
+        [[ -n "$video_path" && -n "$srt_path" ]] && {
+            break
+        }
+    done
+    [[ -z "$video_path" || -z "$srt_path" ]] && {
+        echo "Usage: ff_add_sub video_path.[mkv|mp4] subtitle_path.srt"
+        return
+    }
+    video_path_no_ext="${video_path%\.*}"
+    video_ext="${video_path##*\.}"
+    out_path=$(path "${video_path_no_ext}-added-subtitle.$video_ext")
+    echo "out_path: '$out_path'"
+    # -hide_banner -loglevel panic
+    ffm "$video_path" -sub_charenc 'UTF-8' -f srt -i "$srt_path" -map 0:0 -map 0:1 -map 1:0 -c:v copy -c:a copy -c:s srt "$out_path"
+    # ffm "$video_path" -sub_charenc 'UTF-8' -f srt -i "$srt_path" -map 0:0 -map 0:2 -map 0:3 -map 1:0 -c:v copy -c:a copy -c:s srt "$out_path"
+}
+
+# alias ff="ffmpeg "
+# alias ff_pl="ffplay "
+# # get media info via ffmpeg's ffprobe cmd
+# alias ff_pr="ffprobe "
+# alias ff_pv="ffprobe -select_streams v:0 "
+# alias ff_pvc="ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=s=x:p=0 "
+# alias ff_pvh="ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=s=x:p=0 "
+# alias ff_pvw="ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=s=x:p=0  "
+# alias ff_pa="ffprobe -v 0 -select_streams a -show_entries stream=channels -of csv=s=x:p=0 "
+# # -of csv=s=x:p=0
+# alias ff_fr_f="ffprobe -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=r_frame_rate "
+
+# export film_reso=(360 480 540 720 1080 2160)
+
+# where t_file_name, and full_path are set and valid films (use variables directly)
+# get_reso() {
+#     t_full_path="$1"
+#     if [[ ! -f "$t_full_path" ]]; then
+#         echo "not a file, full_path: $full_path"
+#     fi
+#     # strip whatever is there
+#     # if [[ -n "$t_file_name" ]]; then
+#     #     export film_reso=(360 480 540 720 1080 2160)
+#     #     for reso in "${film_reso[@]}"; do
+#     #         # with then without trailing p
+#     #         t_file_name=$(echo $t_file_name | sed -E "s/${reso}[pP]//g" | sed -E "s/${reso}//g")
+#     #     done
+#     # fi
+#     # echo "post_reso t_file_name: $t_file_name"
+#     # get actual height
+#     t_reso=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=s=x:p=0 "$t_full_path")
+#     t_reso=$(printf '%04d' $t_reso)
+# }
+
+# get_h_10bit() {
+#     t_full_path="$1"
+#     if [[ ! -f "$t_full_path" ]]; then
+#         echo "not a file, full_path: $full_path"
+#     fi
+#     if ! is_video "$t_full_path" ]]; then
+#         echo "not a video file, full_path: $full_path"
+#     fi
+#     t_h=$(ff_pvh "$t_full_path")
+#     t_pix_fmt=$(ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of csv=s=x:p=0 "$t_full_path")
+#     if [[ $t_pix_fmt =~ p10 ]]; then
+#         t_f=10bit
+#     else
+#         t_f=""
+#     fi
+#     # l
+# }
+
+# # gets h/w codec pix_fmt audio_channels
+# # => sets to strings or empty
+# # => t_h, t_w, t_codec, t_pix_fmt, t_a
+# get_media_info() {
+#     t_full_path="$1"
+#     # t_full_path="Adaptation 2002 2 2 2 2076x3840 10bit 7.1.mkv"
+#     if [[ ! -f "$t_full_path" ]]; then
+#         echo "not a file, full_path: $full_path"
+#     fi
+#     # strip whatever is there
+#     # if [[ -n "$t_file_name" ]]; then
+#     #     export film_reso=(360 480 540 720 1080 2160)
+#     #     for reso in "${film_reso[@]}"; do
+#     #         # with then without trailing p
+#     #         t_file_name=$(echo $t_file_name | sed -E "s/${reso}[pP]//g" | sed -E "s/${reso}//g")
+#     #     done
+#     # fi
+#     # echo "post_reso t_file_name: $t_file_name"
+#     # get actual height
+#     # t_h=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=s=x:p=0 "$t_full_path")
+#     # t_w=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=s=x:p=0 "$t_full_path")
+#     # #stream=bits_per_raw_sample
+#     t_h=$(ff_pvh "$t_full_path")
+#     t_w=$(ff_pvw "$t_full_path")
+#     t_codec=$(ff_pvc "$t_full_path")
+#     t_pix_fmt=$(ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of csv=s=x:p=0 "$t_full_path")
+#     if [[ $t_pix_fmt =~ p10 ]]; then
+#         t_f=10bit
+#     else
+#         t_f=""
+#     fi
+#     # local audio_channels_info=$(
+#     ff_pa "$t_full_path" >~/ten/_0
+#     declare -A audio_channels
+#     while read -r line || [[ -n "$line" ]]; do
+#         # # echo "audio_channels:$audio_channels"
+#         if [[ ! $line =~ [0-9] ]]; then
+#             continue
+#         fi
+#         if [[ $line -eq 6 || $line -eq 5 ]]; then
+#             audio_channels["6"]=5.1
+#         elif [[ $line -eq 8 ]]; then
+#             t_a="7.1"
+#             audio_channels["8"]=7.1
+#         elif [[ $line -eq 4 ]]; then
+#             audio_channels["4"]=4.0
+#         elif [[ "$line" -eq 3 ]]; then
+#             audio_channels["3"]=2.1
+#         elif [[ "$line" -eq 2 ]]; then
+#             audio_channels["2"]=2.0
+#         else
+#             echo "audio for $t_full_path is unknown channels: $audio_channels"
+#         fi
+#         # ec $line
+#     done <~/ten/_0
+#     # echo "\!audio_channels[0]: ${!audio_channels[0]}: ${!audio_channels[1]}"
+#     if [[ ${#audio_channels[@]} -gt 1 || -z "${audio_channels[2]}" ]]; then
+#         t_a="${audio_channels[@]}"
+#     else
+#         t_a=""
+#     fi
+
+#     # t_reso=$(printf '%04d' $t_reso)
+#     # echo "${t_h}x${t_w} $t_f $t_codec $t_a"
+# }
+# TODO what in tarnation?
+# ff_fr() {
+#     oof=$(( 1000*$(ff_fr_f $1) ))
+#     ec "${oof:0:-3}.${oof: -3}"
+# }
+# ff_fr2() {
+#     oof=$(( 2000*$(ff_fr_f $1) ))
+#     ec "${oof:0:-3}.${oof: -3}"
+# }
+
+# cat 'encryption.key' | xxd -ps -c32
+# 5e494d088545e483c7d836a4e3a6694b
+# #EXT-X-KEY:METHOD=AES-128,URI="C://fast//jav.guru////encryption.key"
+# ffmpeg -protocol_whitelist file,http,https,tcp,tls,crypto -allowed_extensions ALL -i m.m3u8 _decrypted.mp4
+# ff_concat() {
+#     for a_path in "$@"; do
+#         t_path=$(path "$a_path")
+#         name=$1
+#         segments=$2
+#         parent_dir="$3"
+#         if [[ $# -lt 2 ]]; then
+#             echo "Usage: ff_concat name segment_count"
+#             return
+#         fi
+#         name_txt=${name}.txt
+#         cd "$parent_dir/$name"
+#         # file_path="C:\Users\zaira\Desktop\not_sync\\$name"
+#         >"${name_txt}"
+#         i=1
+#         # echo "${file_path}.txt"
+#         while [[ $i -le $segments ]]; do
+#             echo "file '$i.mp4'" | tee -a "${name_txt}" >/dev/null
+#             ((i++))
+#         done
+#         echo "ffmpeg -f concat -i $name_txt -c copy $name.mp4"
+#         ffmpeg -f concat -i $name_txt -c copy $name.mp4
+#         mv $name.mp4 ../
+#         cd ..
+#     done
+# }
+
+# ff_01_a() {
+#     for a_path in "$@"; do
+#         t_path=$(path "$a_path")
+#         input1=$(lin_path_to_win "$1")
+#         input2=$(lin_path_to_win "$2")
+#         out_path=$(lin_path_to_win "$3")
+#         #echo "ffmpeg -i \"$1\" -i \"$2\" -map 0 -c:v copy -map 1 -c:a copy -c:s copy \"$output\""
+#         # ffmpeg -i "$input1" -i "$input2" -map 0:v -c:v copy -map 0:a -c:a copy -map 1:s -c:s copy "$output"
+#         # ffmpeg -i "$input1" -i "$input2" -map 0:v -c:v copy -map 0:a -c:a copy -map 1:2 -c:s copy -map 1:3 "$output"
+#         neg_maps="-map -1:a -map -1:v"
+#         j=4
+#         while [[ $j -le 14 ]]; do
+#             neg_maps="$neg_maps -map -1:$j"
+#             ((j++))
+#         done
+#         echo "#######################################################################"
+#         echo "ffmpeg -i \"$1\" -i \"$2\" -map 0 -c:v copy -map 1 -c:a copy -map 1 $neg_maps \"$out_path\""
+#         echo "#######################################################################"
+#         ffmpeg -i "$input1" -i "$input2" -map 0:v -c:v copy -map 0:a -c:a copy -map 1 $neg_maps "$out_path"
+#     done
+# }
+
+# ff_test() {
+#     for a_path in "$@"; do
+#         t_path=$(path "$a_path")
+#     dir1="$1"
+#     dir2="$2"
+#     out_dir="$3"
+#     #dir1="C:\s\tor\0_tv\Spy x Family (Season 1) [1080p][HEVC x265 10bit][Multi-Subs]"
+#     #dir2="C:\s\tor\[ReinForce] Spy x Family (BDRip 1920x1080 x264 FLAC)"
+#     alt_files=("skip_first")
+#     for file_in_1 in "$dir1"/*; do
+#         if [[ -f "$file_in_1" ]]; then
+#             alt_files+=("$file_in_1")
+#         fi
+#         #echo "file_in_2: $file_in_2"
+#         #echo "file_in_2: $(lin_path_to_win $file_in_2)"
+#     done
+#     i=1
+#     for file_in_2 in "$dir2"/*; do
+#         if [[ -f "$file_in_2" ]]; then
+#             [[ $i -eq 1 ]] && {
+#                 ((i++))
+#                 continue
+#             }
+#             file_in_1="${alt_files[$i]}"
+#             #echo "file_in_1: $file_in_1"
+#             # echo "file_in_2: $file_in_2"
+#             ff_01_a "$file_in_1" "$file_in_2" "$out_dir\\ep_$i.mkv"
+#             ((i++))
+#         fi
+#     done
+#     #echo "file_in_2: $file_in_2"
+#     #echo "file_in_2: $(lin_path_to_win $file_in_2)"
+# }
+
+#######################
+# ff_delay() {
+#     i=1
+#     echo "1: $1"
+#     for file_path in "$1"/*.mkv; do
+#         [[ $i -eq 1 ]] && {
+#             ((i++))
+#             continue
+#         }
+#         file_name="${file_path##*\/}"
+#         input1=$(lin_path_to_win "$file_path")
+#         echo "file_name: $file_name"
+#         ffmpeg -y -i "$input1" -map 0:s:0 subs.ssa
+#         ffmpeg -y -itsoffset 1.1 -i subs.ssa -c copy subtitles_delayed.ssa
+#         ffmpeg -y -i "$input1" -map 0 -map -0:s -c copy "no_sub.mkv"
+#         mkvmerge --default-language eng -o "C:\s\tor\0_tv\out_sub_delay\\$file_name" no_sub.mkv subtitles_delayed.ssa
+#     done
+#     return
+
+#     # -map 1 -c:s copy
+
+#     #
+#     # -metadata:s:s:0 language=eng
+#     #
+#     # -map 1:0 -c:s copy -c:s ass
+# }
+
+# WIP check
+# ff_cut() {
+#     if [[ $# -lt 3 ]]; then
+#         echo "Usage: cut_a 'file_path' from(00:23[.###]) to(00:29[.###])"
+#         return
+#     fi
+#     a_path="$1"
+#     from="$2"
+#     to="$3"
+#     from_hash="${from%\.*}"
+#     from_hash=$(echo "$from_hash" | tr -d ":")
+#     to_hash="${to%\.*}"
+#     to_hash=$(echo "$to_hash" | tr -d ":")
+#     dir_path="${audio%\/*}"
+#     name="${t_path##*\/}"
+#     codec="${name##*\.}"
+#     echo "codec: $codec"
+#     name="${name%\.*}"
+#     out_path="$dir_path/${name}_${from_hash}_${to_hash}.$codec"
+#     echo "ffm -i \"$a_path\" -vn -acodec copy -ss 00:$from -to 00:$to \"$out_path\""
+#     ffm -i "$a_path" -vn -acodec copy -ss 00:$from -to 00:$to "$out_path"
+#     vlc "$out_path" &
+# }
+
+# scratch
+# 2880 5760 = 2880 x 2880 = 2880 - 680 = 2200 (340 per top/bottom 680 per L/R)
+# ffmpeg -i "${input}" -filter:v "crop=$out_w:$out_h:$x:$y" output.mp4
+# 7757 frames
+# 2880 h
+# 360 => 2160
+# 340 => 2200
+# 320 => 2240
+# 300 => 2280
+# 280 => 2320
+# ffm_crop() {
+#     fpath="$1"
+#     reduce="$2"
+#     reduce2=$((reduce * 2))
+#     reduce4=$((reduce * 4))
+#     fname="${fpath##*\/}"
+#     height=$(ffp_h "$fpath")
+#     width=$(ffp_w "$fpath")
+#     echo "h/w: $height/$width"
+#     echo "reduce2: $reduce2"
+#     x=$reduce2
+#     y=$reduce
+#     new_width=$((width - reduce4))
+#     new_height=$((height - reduce2))
+#     echo "x=$x, y=$y, new_width=$new_width, new_height=$new_height"
+#     out_name="SLR_AsiansexdiaryVR_seg3_${new_width}_${new_height}_red-$reduce"
+#     echo "out_name: $out_name"
+#     ffmpeg -i "${fpath}" -filter:v "crop=$new_width:$new_height:$x:$y" ${out_name}.mp4
+# }
+
+# ffsel '/c/tit/2_tv_new/Star Trek Discovery/Star.Trek.Discovery.S05E01.Direttiva.Rossa.ITA.ENG.1080p.WEB.DDP.H.264-MeM.GP.mkv' 1 3
+# (ffsel() {
+#     media="$1"
+#     video="0"
+#     audio="$2"
+#     subtitle="$3"
+#     dir_path="${media%\/*}"
+#     media_name="${media##*\/}"
+#     ext="${media##*\.}"
+#     ec "media: $media"
+#     ec "ffprobe \"${media}\" -o \"$ten/tenp\""
+#     ffprobe "${media}" 0>"$ten/ten0" 1>"$ten/ten1" 2>"$ten/ten2"
+#     # cat "$ten/ten2"
+#     audio_counter=0
+#     audio_i=""
+#     sub_counter=0
+#     sub_i=""
+#     while read -r line || [[ -n "$line" ]]; do
+#         if [[ "$line" =~ Stream\ \#(.*)\:\ Audio ]]; then
+#             steam_info="${BASH_REMATCH[1]}"
+#             ec "Audio steam_info: $steam_info"
+#             [[ "$steam_info" =~ ^(.*)\((eng)\)$ ]] && {
+#                 echo "Audio $audio_counter: ${BASH_REMATCH[1]}"
+#                 if [[ -z "$audio_i" ]]; then
+#                     audio_i=$audio_counter
+#                 else
+#                     echo "dupe eng audio"
+#                     return
+#                 fi
+#             }
+#             ((audio_counter++))
+#             continue
+#         fi
+#         if [[ "$line" =~ Stream\ \#(.*)\:\ Subtitle ]]; then
+#             steam_info="${BASH_REMATCH[1]}"
+#             ec "Subtitle steam_info: $steam_info"
+#             [[ "$steam_info" =~ ^(.*)\((eng)\)$ ]] && {
+#                 echo "Audio $sub_counter: ${BASH_REMATCH[1]}"
+#                 if [[ -z $sub_i ]]; then
+#                     sub_i=$sub_counter
+#                 else
+#                     echo "dupe eng audio"
+#                     return
+#                 fi
+#             }
+#             ((sub_counter++))
+#             continue
+#         fi
+#         echo "line: $line"
+#     done <"$ten/ten2"
+
+#     echo "audio_i: $audio_i"
+#     echo "sub_i: $sub_i"
+
+#     [[ -z "$audio_i" ]] && {
+#         echo "no audio found"
+#         return
+#     }
+#     [[ -z "$sub_i" ]] && {
+#         echo "no subtitle found"
+#         return
+#     }
+#     ec "ffm -i \"$1\" -map 0:v -c:v copy -map 0:a:$audio_i -c:a copy -map 0:s:$sub_i -c:s copy \"${dir_path}/${media_name}.$ext\""
+#     ffm -i "$1" -map 0:v -c:v copy -map 0:a:$audio_i -c:a copy -map 0:s:$sub_i -c:s copy "${dir_path}/${media_name}.$ext"
+# })
+
+export rec_script="$_s/rec"
+# _er() {
+#     if [[ $2 =~ [[:digit:]]{1,4} && $# -gt 3 && $3 == curl ]]; then
+#         echo "_er start w/index"
+#         echo "\"$rec_script\" \"$1\" \"$2\" \"$4\""
+#         "$rec_script" "$1" "$2" "$4"
+#     fi
+#     if [[ $# -lt 3 || ! $2 == curl ]]; then
+#         echo "Usage: _er name curl...pasted "
+#         exit
+#     fi
+#     echo "\"$rec_script\" \"$1\" \"$3\""
+#     "$rec_script" "$1" "$3"
+# }

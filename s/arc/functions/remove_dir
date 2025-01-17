@@ -1,0 +1,40 @@
+#!/bin/bash
+# x_ "$_s/arc/functions/remove_dir"
+# "$_s/arc/functions/remove_dir"
+
+# removes all files within passed directories from $db_table
+$r_ _ sql
+
+while getopts 't:' OPTION; do
+    case "$OPTION" in
+    t)
+        db_table="$OPTARG"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        return 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+remove_dir() {
+    for dir_path in "$@"; do
+        [[ ! -d "$dir_path" ]] && {
+            echo "error argument: '$dir_path' is not a directory"
+            continue
+        }
+        for file_path in $dir_path/*; do
+            sha2="$(si $file_path)"
+            echo "sha2: $sha2"
+            count_for_sha=$(count_q -t $db_table -i "sha2 = '$sha2'")
+            echo "count_for_sha: $count_for_sha"
+            [[ $count_for_sha -eq 1 ]] && {
+                delete_q -t $db_table -i "sha2 = '$sha2'"
+            }
+            # all_sha=$(select_q -t nuke -w sha2)
+        done
+    done
+}
+
+remove_dir "$@"

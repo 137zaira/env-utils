@@ -1,0 +1,75 @@
+#!/bin/bash
+# . $_u/t/sql/delete
+
+if [[ $# -lt 1 || ! $1 = _ ]]; then
+    . "$_sql/sql"
+fi
+
+# delete_q -i sha2='f627b...'
+delete_q() {
+    print_q() {
+        [[ 1 -eq 0 ]]
+    }
+    local run_alt=0
+    local if_cond=""
+    local OPTIND extra_args
+    local tables_arr=()
+    # echo "select_complex $@"
+    while getopts 'paf:t:w:i:' OPTION; do
+        case "$OPTION" in
+        p)
+            print_q() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        a)
+            run_alt=1
+            ;;
+        f)
+            extra_args="$extra_args -f $OPTARG"
+            ;;
+        t)
+            local db_table="$OPTARG"
+            ;;
+        i)
+            if_cond="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            return 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    # check set - location|db_file|db_table
+    check_all_db_vars || {
+        echo "unset db_vars"
+    }
+
+    if [[ -z "$if_cond" ]]; then
+        echo "if_cond: -i ..., is required"
+        exit
+    fi
+
+    # if [[ $run_alt -eq 0 && -z "$db_table" ]]; then
+    #     echo "pass: -t db_table, or set '\$db_table' in env"
+    #     return
+    # fi
+    query="
+DELETE FROM $db_table
+WHERE $if_cond
+"
+    print_q && {
+        echo "sql $extra_args \"$query\""
+    }
+    result=$(sql $extra_args "$query")
+    [[ $? -gt 0 ]] && {
+        ec_err "sql failed ($?):sql $extra_args \"$query\""
+        exit
+    }
+    if [[ -n "$result" && ! "$result" = "0" ]]; then
+        echo "$result"
+        return
+    fi
+}

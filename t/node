@@ -1,0 +1,66 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 8 ]] && echo _fb node
+
+alias n_e="npm run release; "
+n_r() {
+    if [ $# -eq 0 ]; then
+        npm start
+    else
+        npm run "$@"
+    fi
+}
+
+alias nn="npm start; "
+alias n_="npm start; "
+# alias n_="npm start; "
+
+# alias n_br="npm run release; "
+alias n_b="npm run build; "
+# alias n_e="npm run build; "
+alias n_bp="npm run _post_build; "
+# alias ner= reref rawx
+alias ner="npm run re_i; "
+alias n_rp="npm run pack; "
+# default npm init
+alias n_in="npm init -y "
+
+alias n_if="n_i --force "
+alias n__="rf package-lock.json node_modules; n_i; "
+alias n__f="rf package-lock.json node_modules; n_if; "
+
+# alias n_api="cd_ute e_e n_ web/storage/express_api.js; "
+# alias n_hi="cd_ute node ./web_dual_serve.js; "
+# active project dir utils
+alias n_ute="cd_ute npm run start; "
+alias n_hi="clear; cd_ute node web_dual_serve.js; "
+# clean/build/run
+# alias n_s_ute="cd_ute npm run start; "
+# dev server/dev cargo
+alias run_ute="cd_ute npm start; "
+alias run_uteh="cd_ute npm run hybrid; "
+alias ute_="cd \"$_c/ute\" && n_i_s "
+
+alias n_ig="npm i -g "
+
+alias _no="node "
+alias n_r="npm run "
+alias n_b="n_r build; "
+# alias n_s="npm start; "
+
+alias n_i="npm i "
+# no semi allows --force to be added as needed
+alias f_="--force "
+alias n__b="n__ n_b; "
+alias n__fb="n__ f_ n_b; "
+alias n_is="n_i -D "
+alias n_isf="n_i -D f_ "
+alias n_i_s="n_i ; npm start ; "
+alias n__i_s="n__f ; npm start ; "
+alias n_g="npm i -g "
+
+# npm typos
+# alias no="npm "
+
+# https://github.com/nodejs/node/issues/5620
+# alias npm="winpty npm.cmd "
+# alias npm="npm.cmd "

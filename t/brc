@@ -1,0 +1,92 @@
+#!/bin/bash
+# $r_ or . "$_t/btc"
+# bootstraps the rc files
+# $r_ _ mod1 mod2 => load $_t/com + mod1 ...
+#########
+
+# always fresh load aliases (you may experiment removal)
+unalias -a
+shopt -s expand_aliases
+
+if [[ $# -gt 0 && $1 = _ ]]; then
+    sub_script=1
+    shift
+elif [[ ! $0 =~ bash ]]; then
+    sub_script=1
+else
+    sub_script=0
+fi
+
+if [[ -z $_debug ]]; then
+    export _debug=6
+fi
+
+load_modules() {
+    for mod in "${load_mods[@]}"; do
+        # ec "loading: $mod"
+        if [[ -f "$_t/util/$mod" ]]; then
+            # ec "loading: $_t/util/$mod"
+            . "$_t/util/$mod" _
+            continue
+        fi
+        if [[ -f "$_t/sql/$mod" ]]; then
+            # ec "loading: $_t/util/$mod"
+            . "$_t/sql/$mod" _
+            continue
+        fi
+        # 2 special case paths for sys win/lin specific rc boot-strapping files
+        # $_t/rc_lin or $_t/rc_win depending on system
+        if [[ $mod = sys ]]; then
+            # ec "loading: $_t/rc_${sys}"
+            . "$_t/rc_${sys}" _
+            [[ -f "$_u/local/local_${sys}" ]] && {
+                . "$_u/local/local_${sys}" _
+            }
+            continue
+        fi
+        if [[ ! -f "$_t/$mod" ]]; then
+            echo "file module missing: $_t/$mod"
+            continue
+        fi
+        # echo ". \"$_t/$mod\""
+        . "$_t/$mod" _
+    done
+}
+
+##################<always-load>#####################
+# always load common module and set refresh var keystrokes
+. "$_t/com"
+alias _e="$r_ "
+
+# if sub_script, only load modules from args $@, com is the only exception
+if [[ $sub_script -eq 1 ]]; then
+    # only load com & "$@" modules
+    load_mods=("$@")
+    load_modules
+    return
+fi
+#################<\always-load>#####################
+
+#########<defaults>###########
+# conf pyt
+load_mods=(ali file git sys ff)
+#########</defaults>###########
+
+# add additional modules as requested
+for arg in "$@"; do
+    if [[ $arg = env ]]; then
+        if [[ -f /etc/env ]]; then
+            . /etc/env
+        else
+            echo "Warning /etc/env rc is only available on linux"
+        fi
+        continue
+    fi
+    [[ ! $load_mods =~ $arg ]] && {
+        load_mods+=("$arg")
+    }
+done
+load_modules
+
+# delay splash for term open bootstrap as a subprocess
+$_t/util/welcome &

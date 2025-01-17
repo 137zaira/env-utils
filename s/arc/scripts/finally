@@ -1,0 +1,102 @@
+#!/bin/bash
+# x_ "$_s/arc/finally"
+# . "$_s/arc/finally"
+# sets main db entries of a pair
+
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+
+$r_ _ sql pmt
+
+stats() {
+    ec1 "checked_file_count:            $checked_file_count"
+    ec2 "other_file_count:              $other_file_count"
+    ec1 "files_found_at_same path:      $files_found_at_same"
+    ec2 "files w/updated_path:          $files_updated_path"
+    ec1 "inserted_file_count:           $inserted_file_count"
+
+    [[ $arc_fn = "del" ]] && ec2 "files_deleted:                 $files_deleted"
+    ec1 "dir_count:   $dir_count"
+    ec1 "dir_removed: $dir_removed"
+    local count_zero=$(select_q -w 'COUNT(*)' -i "flip_bit = '0'")
+    local count_one=$(select_q -w 'COUNT(*)' -i "flip_bit = '1'")
+    ec1 "zero db_entries: $count_zero"
+    ec2 "one  db_entries: $count_one"
+}
+
+stats
+col_count=$(cat "$log_dir/col" | wc -l)
+ec1 "col_count: $col_count"
+if [[ $col_count -gt 0 ]]; then
+    # yes_or_no "cat \"$log_dir/col\"" && {
+    # cat "$log_dir/col"
+    # }
+    yes_or_no -i "run col? (to remove)" && {
+        col
+    }
+fi
+
+# no_vid_dir_count=$(cat "$log_dir/no_vid_dirs" | wc -l)
+# ec2 "no_vid_dir_count: $no_vid_dir_count"
+# if [[ $no_vid_dir_count -gt 0 ]]; then
+#     yes_or_no -i "cat no_vid_dirs?" && {
+#         while read -r line || [[ -n "$line" ]]; do
+#             if [[  $(ls "$line" | wc -l) -gt 0 ]]; then
+#                 echo "non empty dir: $line"
+#                 yes_or_no -i "ls dir?" && {
+#                     ls "$line"
+#                     yes_or_no "delete empty dir: '$line'?" && {
+#                         echo "rf \"$line\""
+#                         rf "$line"
+#                     }
+#                 }
+#                 continue
+#             fi
+#             yes_or_no "delete empty dir: '$line'?" && {
+#                 echo "rf \"$line\""
+#                 rf "$line"
+#             }
+#         done <"$log_dir/no_vid_dirs"
+#     }
+# fi
+
+missing=$(select_q -w "COUNT(*)" -i "flip_bit = '0'")
+if [[ $missing -gt 0 ]]; then
+    echo "$missing not present in run"
+    yes_or_no -i "show" && {
+        # select_sha_fp_where_zero
+        select_q -w "sha2, file_subpath" -i "flip_bit = '0'"
+    }
+    yes_or_no -i "delete entries w/zero" && {
+        delete_q -i "flip_bit = '0'"
+    }
+fi
+# TODO check shasum against dif size file?
+
+# WIP union tables
+# https://stackoverflow.com/questions/6456388/how-to-move-union-query-results-to-a-new-table
+# SELECT <COLUMNS_LIST>
+#   INTO <NEW_TABLE_NAME>
+#   FROM <TABLES, WHERE ETC>
+
+# SELECT *
+#   INTO  #temp_UNION
+# FROM
+# (
+#         SELECT     *
+#     FROM         [#temp1]
+#     UNION
+#     SELECT     *
+#     FROM         [#temp2]
+#     UNION
+#     SELECT     *
+#     FROM         [#temp3]
+#     UNION
+#     SELECT     *
+#     FROM         [#temp4]
+#     UNION
+#     SELECT     *
+#     FROM

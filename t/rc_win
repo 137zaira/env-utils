@@ -1,0 +1,446 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 8 ]] && echo "${f_1}  <sys_win/rc> ${f_2}"
+
+# wip #
+# $r_ _
+. $_t/com
+
+eval $(ssh-agent)
+ssh-add /c/Users/zaira/.ssh/git_ed25519
+
+# alias python3="python3.11 "
+# alias python="python3 "
+# alias py="winpty -Xallow-non-tty python3.11.exe "
+# alias pip3="python -m pip3.11 "
+# alias pip="python -m pip3.11 "
+# alias wpy="py "
+
+# /C/_/cl/next/outputs/control
+tuc() {
+    local o_dir=/C/_/cl/next/outputs/control
+    local recent_rand="$o_dir/recent_$(rnd4)"
+    i=0
+    while [[ -d "$recent_rand" ]]; do
+        [[ $i -eq 100 ]] && {
+            echo "too many attepts to find new dir"
+            return 1
+        }
+        recent_rand="$o_dir/recent_$(rnd4)"
+        ((i++))
+    done
+    mv "$o_dir/latest" "$recent_rand"
+    mkdir "$o_dir/latest"
+    mv "$o_dir"/*.png "$o_dir/latest"
+}
+
+su() {
+    nash
+}
+sudo() {
+    "$@"
+}
+
+si() {
+    for arg in "$@"; do
+        # echo "shasum -a 256 \"$arg\" | cut -d ' ' -f1"
+        shasum -a 256 "$arg" | cut -d ' ' -f1
+    done
+}
+
+[[ ! -d "$ten/hk" ]] && {
+    mkdir -p "$ten/hk"
+}
+
+fun() {
+    if [[ $# -gt 0 ]]; then
+        explorer $@ &
+    else
+        explorer .
+    fi
+}
+
+vlc() {
+    "C:\Program Files (x86)\VideoLAN\VLC\vlc.exe" "$@" &
+}
+
+lc() {
+    "/c/_/b/lc/LosslessCut.exe" "$@" &
+}
+
+d_d() {
+    start diskmgmt.msc
+}
+
+export punt_base="/c/s/u"
+move_to_punt() {
+    local sub_path="$1"
+    local path="$_u/$sub_path"
+    if [[ -f "$path" ]]; then
+        local punt_path="$punt_base/$sub_path"
+        local punt_path_dir="${punt_path%\/*}"
+        [[ ! -d "$punt_path_dir" ]] && mkdir -p "$punt_path_dir"
+        echo "cp \"$path\" \"$punt_path\""
+        cp -f "$path" "$punt_path"
+    elif [[ -d "$path" ]]; then
+        # strip trailing slash
+        sub_path="${@%/}"
+        local punt_path="$punt_base/$sub_path"
+        # if [[ -d "$punt_path" ]]; then
+        #     echo "error unstaged dir presently punted: $punt_path"
+        #     return
+        # fi
+        local punt_path_dir="${punt_path%\/*}"
+        [[ ! -d "$punt_path_dir" ]] && mkdir -p "$punt_path_dir"
+        echo "cp -rf \"$path\" \"$punt_path\""
+        cp -rf "$path" "$punt_path"
+    else
+        echo "path not found: $path"
+    fi
+}
+
+punt() {
+    cd "$_u"
+    local status=$(git status)
+    after_untracked_header=0
+    after_first=0
+    rm -rf "$punt_base"
+    mkdir "$punt_base"
+    while read -r line || [[ -n "$line" ]]; do
+        if [[ $after_untracked_header -eq 1 && $after_first -eq 0 ]]; then
+            after_first=1
+            continue
+        fi
+        if [[ "$line" =~ modified\:[[:space:]]+([^\ ]*)$ ]]; then
+            # echo "$line"
+            mod_path="${BASH_REMATCH[1]}"
+            if [[ ! "$line" =~ re_ ]]; then
+                echo "move_to_punt \"$mod_path\""
+                move_to_punt "${mod_path}"
+            fi
+            continue
+        elif [[ "$line" =~ deleted\:[[:space:]]+([^\ ]*)$ ]]; then
+            # echo "$line"
+            mod_path="${BASH_REMATCH[1]}"
+            if [[ ! "$line" =~ re_ ]]; then
+                # local path="$_u/$mod_path"
+                local punt_path_delete="$punt_base/${mod_path}.delete"
+                local punt_path_delete_dir="${punt_path_delete%\/*}"
+                echo "punt_path_delete_dir: $punt_path_delete_dir"
+                [[ ! -d "$punt_path_delete_dir" ]] && mkdir -p "$punt_path_delete_dir"
+                echo "touch \"$punt_path_delete\""
+                touch "$punt_path_delete"
+            fi
+            continue
+        fi
+        if [[ $after_untracked_header -eq 1 ]]; then
+            if [[ -z "$line" ]]; then
+                return
+            fi
+            if [[ ! "$line" =~ re_ ]]; then
+                echo "move_to_punt \"${line}\""
+                move_to_punt "$line"
+            fi
+            continue
+        fi
+        if [[ "$line" =~ Untracked\ files\: ]]; then
+            after_untracked_header=1
+        fi
+        # fi
+    done <<<"$status"
+    echo "cp -f ./local/local_lin \"$punt_base/local\""
+    cp -f ./local/local_lin "$punt_base/local"
+}
+
+dir_to_crlf() {
+    [[ $# -lt 1 || ! -d "$1" ]] && {
+        echo "Usage: dir_to_crlf [dir_path]"
+        return
+    }
+    cd "$1"
+    local status=$(git status)
+    while read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ modified\:[[:space:]]+([^\ ]*)$ ]]; then
+            echo "unix2dos \"$_u/${BASH_REMATCH[1]}\""
+            unix2dos "$_u/${BASH_REMATCH[1]}"
+        fi
+    done <<<"$status"
+}
+
+ply() {
+    "C:\Program Files\7-Zip\7z.exe" -y -o/c/_/u/ x "c:\s\u\u.7z"
+    [[ $? -eq 0 ]] && rm "c:\s\u\u.7z"
+    dir_to_crlf "$_u"
+}
+
+strip_clean() {
+    [[ $# -lt 2 ]] && {
+        echo "Usage: strip_clean src_file_path new_file_path"
+        return
+    }
+    src_file_path="$1"
+    new_file_path="$2"
+    file_wrapper() {
+        file_fpath="$1"
+        # file read by line ; [[ -n $repl ]]; => include last line of file
+        IFS=''
+        while read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" =~ ^(.*)file\:///C\:(.*)_clean\.mp4\</location\> ]]; then
+                # \<\/location\>$ ]]; then
+                echo "$line"
+                echo "${BASH_REMATCH[1]}file:///C:${BASH_REMATCH[2]}.mp4</location>" >>"$new_file_path"
+            else
+                echo "$line" >>"$new_file_path"
+            fi
+        done <"$file_fpath"
+    }
+    file_wrapper "$src_file_path"
+}
+
+# xclip win path from bash patx
+# win_clip() {
+#     input="$1"
+#     result="${input#*\/c}"
+#     echo "C:$result"
+#     echo "C:$result" | clip
+# }
+
+crom() {
+    "$_h\AppData\Local\Chromium\Application" "$@" &
+}
+
+crop() {
+    [[ $# -lt 4 ]] && {
+        echo "Usage: crop -f image_file_path -o out_image_file_path -t? -b?"
+        echo "-f and -o are required"
+        return
+    }
+    "C:\_\b\envs\def\Scripts\python.exe" "C:\_\u\s\py\crop.py" "$@"
+}
+
+path_to_win() {
+    local working_path="$1"
+    [[ "$working_path" =~ ^\/ ]] && working_path="${1#*\/}"
+    echo "$working_path" | sed -E "s/^[cC][:]?/C:/g" | sed -E "s/\//\\\\/g" 2>/dev/null
+}
+export hk_save_dir="$_h/AppData/LocalLow/Team Cherry/Hollow Knight"
+export hk_ten_dir="$ten/hk"
+hu() {
+    [[ $# -lt 1 ]] && {
+        echo "usage: hu \$path[.../path/title.dat"]
+        return
+    }
+    if [[ ! -f "$1" ]]; then
+        if [[ -f "$hk_ten_dir/${1}.dat" ]]; then
+            cp -f "$hk_ten_dir/${1}.dat" "$hk_save_dir/user1.dat"
+        elif [[ -f "$hk_ten_dir/${1}" ]]; then
+            cp -f "$hk_ten_dir/${1}" "$hk_save_dir/user1.dat"
+        else
+            echo "save not found"
+            return
+        fi
+        echo "save updated"
+        return
+    fi
+    cp -f "$1" "$hk_save_dir/user1.dat"
+    echo "save updated"
+}
+hu_() {
+    cd "$ten/hk"
+    explorer $(path_to_win "$ten/hk")
+}
+hs() {
+    [[ $# -lt 1 ]] && {
+        echo "usage: hs \$title"
+        return
+    }
+    title="$1"
+    # cp -f "$hk_save_dir/user1_1.5.78.11833.dat" "$ten_dir/hk/$title.dat"
+    cp -f "$hk_save_dir/user1.dat" "$ten/hk/$title.dat"
+}
+
+# see /c/_/b/bin/ytdl
+# Specify audio format: "best", "aac",
+# "flac", "mp3", "m4a", "opus", "vorbis",
+# or "wav"; "best" by default;
+# ytdl() {
+#     url="$1"
+#     dl_to="/c/s/dl/video"
+#     vid_type="webm"
+#     cd "/c/_/yt/ytdl"
+#     [[ ! -d "$dl_to" ]] && mkdir -p "/c/_/dl/video"
+#     python -m youtube_dl --no-playlist -f "bestvideo[ext=$vid_type]+bestaudio[ext=opus]/best[ext=mp4]/best" -o "$dl_to/%(title)s.%(ext)s" "$url"
+# }
+
+# https://stackoverflow.com/questions/18641864/git-bash-shell-fails-to-create-symbolic-links
+link() {
+    if [[ -z "$2" ]]; then
+        # Link-checking mode.
+        fsutil reparsepoint query "$1" >/dev/null
+        return
+    fi
+    # Link-creation mode.
+    # Windows needs to be told if it's a directory or not. Infer that.
+    # Also: note that we convert `/` to `\`. In this case it's necessary.
+    if [[ -d "$2" ]]; then
+        comma='mklink /j /D "'$1'" "'${2//\//\\}'"'
+    else
+        comma='mklink /j "'$1'" "'${2//\//\\}'"'
+    fi
+    cmd <<<"$comma" >/dev/null
+}
+
+nu_d() {
+    echo "nu_d@ $(pwd)"
+    del_file_path="/C/tit/98_other_etc/db/deleted_vr.txt"
+    if [[ $# -gt 0 ]]; then
+        for arg in "$@"; do
+            if [[ -f "$arg" ]]; then
+                echo "arg: $arg"
+                file_name="${arg##*\/}"
+                file_title="${file_name%\.*}"
+                add_if_unique "$file_title" "$del_file_path"
+            else
+                echo "skipping non_file: '$arg'"
+            fi
+        done
+    else
+        for arg in "$(pwd)"/*; do
+            if [[ -f "$arg" ]]; then
+                echo "arg: $arg"
+                file_name="${arg##*\/}"
+                file_title="${file_name%\.*}"
+                add_if_unique "$file_title" "$del_file_path"
+            else
+                echo "skipping non_file: '$arg'"
+            fi
+        done
+    fi
+
+}
+
+nu_s() {
+    del_file_path="/C/tit/98_other_etc/db/sourced_vr.txt"
+    for arg in "$@"; do
+        file_name="${arg##*\/}"
+        file_title="${file_name%\.*}"
+        add_if_unique "$file_title" "$del_file_path"
+    done
+}
+
+nu_df() {
+    del_file_path="/C/tit/98_other_etc/db/deleted_flat.txt"
+    for arg in "$@"; do
+        file_name="${arg##*\/}"
+        file_title="${file_name%\.*}"
+        add_if_unique "$file_title" "$del_file_path"
+    done
+}
+
+nu_sf() {
+    del_file_path="/C/tit/98_other_etc/db/sourced_flat.txt"
+    for arg in "$@"; do
+        file_name="${arg##*\/}"
+        file_title="${file_name%\.*}"
+        add_if_unique "$file_title" "$del_file_path"
+    done
+}
+
+nu_m() {
+    del_file_path="/C/tit/98_other_etc/db/deleted_moe.txt"
+    for arg in "$@"; do
+        add_if_unique "$arg" "$del_file_path"
+    done
+}
+
+############################################################################
+
+# move year from ...(#) -> #...
+scut() {
+    cur_path="$(pwd)"
+    for path in "$cur_path"/*; do
+        name="${path##*\/}"
+        base="${path%\/*}"
+        #echo "name: $name"
+        if [[ -d "$path" ]]; then
+            if [[ "$name" =~ ^(.*)\ [\(\[](20[012][0-9])[\]\)](.*)$ ]] || [[ "$name" =~ ^(.*)\ [\(\[](19[6-9][0-9])[\]\)](.*)$ ]]; then
+                name_head="${BASH_REMATCH[1]}"
+                year=${BASH_REMATCH[2]}
+                name_tail="${BASH_REMATCH[3]}"
+                #echo "\$year: ${year}"
+                if [[ -n "$name_tail" ]]; then
+                    name="${year}_${name_head}_${name_tail}"
+                else
+                    name="${year}_${name_head}"
+                fi
+                echo "mv '$path' '$base/$name'"
+                mv "$path" "$base/$name"
+            else
+                echo "no match: '$name'"
+            fi
+        fi
+    done
+}
+
+add_if_unique() {
+    content="$1"
+    file_path="$2"
+
+    content_name="${content##*\/}"
+    content_title="${content_name%\.*}"
+    [[ "$content_title" =~ ^(.*)_cut(.*)$ ]] && {
+        content_title="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    }
+    echo "content_title: $content_title"
+
+    file_truncated="${file_path%\.*}"
+    file_ext="${file_path##*\.}"
+    tmp_file_path="${file_truncated}_tmp.$file_ext"
+    bk_file_path="${file_truncated}_bk.$file_ext"
+    # check if $file_path lost data
+    if [[ -f "$file_path" && -f "$bk_file_path" ]]; then
+        # echo "file_path: $file_path"
+        # echo "bk_file_path: $bk_file_path"
+        wc_line_count=$(wc -l "$file_path" | awk '{print $1;}')
+        wc_bk_line_count=$(wc -l "$bk_file_path" | awk '{print $1;}')
+        if [[ $wc_line_count -lt $wc_bk_line_count ]]; then
+            echo "bk file larger than file_path, aborting"
+            return
+        fi
+    fi
+    # backup $file_path
+    if [[ -f "$file_path" ]]; then
+        cp -f "$file_path" "$bk_file_path"
+    fi
+    content_upper=$(echo "$content_title" | sed 's/.*/\U&/')
+    ec "content_upper: $content_upper"
+    found=0
+    from_second=""
+    if [[ -f "$file_path" ]]; then
+        mv -f "$file_path" "$tmp_file_path"
+        while read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" ]] && {
+                continue
+            }
+            # echo "line: '$line'"
+            line_upper=$(echo "$line" | sed 's/.*/\U&/')
+            if [[ $found -eq 0 ]]; then
+                if [[ "$content_upper" = "$line_upper" ]]; then
+                    found=1
+                elif [[ "$line_upper" > "$content_upper" ]]; then
+                    # echo "found, \$line_upper" \> "\$content_upper"
+                    echo -en "${from_second}$content_title" >>"$file_path"
+                    found=1
+                fi
+            fi
+            echo -en "${from_second}$line" >>"$file_path"
+            from_second="\n"
+            # done <"$del_file_path"
+        done <"$tmp_file_path"
+        rm "$tmp_file_path"
+    fi
+    if [[ $found -eq 0 ]]; then
+        echo -en "\n$content_title" >>"$file_path"
+    fi
+}
+
+[[ $_debug == import || $_debug -gt 8 ]] && echo "${f_1} <rc_win> ${f_2}"

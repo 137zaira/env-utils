@@ -1,0 +1,34 @@
+#!/bin/bash
+shopt -s expand_aliases
+
+# count in dir
+alias lsc="ls -l | grep - | wc -l "
+
+alias envg="env | grep "
+# prints all aliases
+alias ali="alias; "
+alias cl="clear; "
+alias co="codium "
+alias nvs="nvidia-smi; "
+
+# alias pro="$_b/bin/pro "
+alias gogs="$_b/gogs/gogs.sh "
+
+alias cdu="cd $_u "
+alias cdt="cd $_t "
+alias cds="cd $_s "
+alias cdh="cd $_h "
+alias cdd="cd $_d "
+alias cdl="cd $_d/cl "
+
+alias csd="cd $_d/cl/next "
+alias rsd="cdsd; ./run "
+alias cgs="echo \"cd '$_d/util/gs'\" && cd '$_d/util/gs' "
+alias rgs="cgs; echo 'npm start'; npm start "
+
+alias cdsdlast="cd $_d/cl/sdlast "
+alias rsdlast="cdsdlast; ./run "
+alias rui="echo 'cd $_d/cl/sdui'; cd $_d/cl/sdui; echo './r'; ./r "
+alias csd="echo 'cd $_d/cl/next'; cd $_d/cl/next; "
+alias rsd="csd echo './r'; ./r "
+alias ckit="echo 'cd /a/1_other/01_files/whl/kit' && cd /a/1_other/01_files/whl/kit "

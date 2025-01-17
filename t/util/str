@@ -1,0 +1,175 @@
+#!/bin/bash
+[[ $_debug == import || $_debug -gt 8 ]] && _fs str
+
+export seps='([\.]|[_]|[-]|[[:space:]]|[][()])+'
+#|[\(]|[\)]|)+'
+strip_escape() {
+    echo "$@" | sed -e 's/\\//g'
+}
+strip_brackets() {
+    echo "$@" | sed 's/[][()?]//g'
+}
+to_underscore() {
+    echo "$@" | sed 's/[.]/_/g' | sed 's/[ ]/_/g'
+}
+dedupe_sep() {
+    tabled="$1"
+    while [[ "$tabled" =~ ^(.*)([_]|\-)([_]|\-)(.*)$ ]]; do
+        tabled="${BASH_REMATCH[1]}_${BASH_REMATCH[4]}"
+    done
+    echo "$tabled"
+}
+# remove leading/trailing spaces
+scrub_space_ends() {
+    t_string="$1"
+    if [[ "$t_string" =~ ^[[:blank:]]+(.*)$ ]]; then
+        t_string="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$t_string" =~ ^(.*)[[:blank:]]+$ ]]; then
+        t_string="${BASH_REMATCH[1]}"
+    fi
+    # echo "t_string: $t_string"
+}
+strip_bracket_and_underscore() {
+    local scored=$(to_underscore "$1")
+    # let echo out =>
+    local brak_stript="$(strip_brackets $scored)"
+    dedupe_sep "$brak_stript"
+}
+# buff off separators head+tail
+scratch_string() {
+    if [[ $# -eq 0 ]]; then
+        # ec "pre head: $head , tail: $tail"
+        # remove pre/postfix sep from head
+        while [[ "$head" =~ ^${seps}+(.+) ]]; do
+            head="${BASH_REMATCH[2]}"
+            # echo "new head: $head"
+        done
+        while [[ "$head" =~ ^(.+)${seps}$ ]]; do
+            head="${BASH_REMATCH[1]}"
+            # echo "new head: $head"
+        done
+        # remove postfix sep from tail
+        while [[ "$tail" =~ ^(.+)${seps}$ ]]; do
+            tail="${BASH_REMATCH[1]}"
+            # echo "new tail: $tail"
+        done
+        while [[ "$tail" =~ ^${seps}+(.+) ]]; do
+            tail="${BASH_REMATCH[2]}"
+            # echo "new tail: $tail"
+        done
+        # clear if only separator remaining, matches multi i think
+        # if [[ "$head" =~ ^$seps$ ]]; then
+        #     head=""
+        # fi
+        # if [[ "$tail" =~ ^$seps$ ]]; then
+        #     tail=""
+        # fi
+        left_length=${#head}
+        if [[ tit_index -gt $left_length ]]; then
+            tit_index=$left_length
+        fi
+        return
+    fi
+    if [[ "$1" = r ]]; then
+        # ec "pre rematch: $rematch"
+        # remove prefix sep from rematch-head
+        while [[ "$rematch" =~ ^${seps}(.+)$ ]]; do
+            rematch="${BASH_REMATCH[2]}"
+            # ec "new/head rematch: $rematch"
+        done
+        # remove postfix sep from rematch-tail
+        while [[ "$rematch" =~ ^(.+)${seps}$ ]]; do
+            rematch="${BASH_REMATCH[1]}"
+            # ec "new/tail rematch: $rematch"
+        done
+        # clear if only separator remaining
+        # if [[ "$rematch" =~ ^$seps$ ]]; then
+        #     rematch=""
+        # fi
+        return
+    fi
+    # ec "___ ELSE ___"
+    post_echo=""
+    for scratch in "$@"; do
+        # remove prefix sep from rematch-head
+        while [[ "$scratch" =~ ^${seps}(.+)$ ]]; do
+            scratch="${BASH_REMATCH[2]}"
+            # ec "new scratch: $scratch  (head)"
+        done
+        # remove postfix sep from rematch-tail
+        while [[ "$scratch" =~ ^(.+)${seps}$ ]]; do
+            scratch="${BASH_REMATCH[1]}"
+            # ec "new scratch: $scratch  (tail)"
+        done
+        # clear if only separator remaining
+        # while [[ "$scratch" =~ ^$seps$ ]]; do
+        #     scratch=""
+        #     ec "new scratch: $scratch  (nashed)"
+        # done
+        # clear if only separator remaining
+        # echo "pre nash scratch: $scratch"
+        if [[ "$scratch" =~ ^(.*)$seps(.*)$ ]]; then
+            if [[ -z "${BASH_REMATCH[1]}" && -z "${BASH_REMATCH[3]}" ]]; then
+                # no echo pass
+                # ec "new scratch: $scratch  (nashed)"
+                continue
+            fi
+            # scratch=""
+            # ec "new scratch: $scratch  (nashed)"
+        fi
+        # echo "$scratch "
+        # spaces for separator after first
+        if [[ -n $post_echo ]]; then
+            echo " \"$scratch\""
+        else
+            echo "\"$scratch\""
+        fi
+    done
+}
+# seps='([\._[:space:]]|[-])+'
+# # seps='(\\\-|[\._[:space:]])+'
+# # [:space:]
+# head=".qqeerr_tac-"
+# tail="-qqeerr_tac.-"
+# ec "no_arg => head: $head tail: $tail"
+# scratch_string
+# echo "After _=_ head: $head , tail: $tail"
+# rematch=".qqeerr_tac."
+# ec "arg r => rematch: $rematch"
+# scratch_string r
+# echo "After _=_ rematch: $rematch"
+# # updated_scratch=($(scratch_string ".qqeerr_tac." "- scratch-tac.-"))
+# # echo -e "OUTER_=_ updated_scratch[1] = ${updated_scratch[1]} , \n updated_scratch[2] = ${updated_scratch[2]}"
+# # echo -e "OUTER_=_ updated_scratch[@] = ${updated_scratch[@]}\n\n"
+# ec "args (.qqeerr_tac.) (- scratch-tac.-)"
+# scratch_result=($(scratch_string ".qqeerr_tac." "- scratch-tac.-"))
+# ec "\$scratch_result: ${scratch_result[@]}"
+# film Year 1950-2024
+is_year() {
+    if [[ ! $# = 1 ]]; then
+        _false
+        return
+    fi
+
+    if [[ $1 =~ ^20 ]]; then
+        if [[ $1 =~ 20[2][0-4] ]]; then
+            _true
+            return
+        elif [[ $1 =~ 20[0-1][0-9] ]]; then
+            _true
+            return
+        else
+            _false
+            return
+        fi
+    fi
+    if [[ $1 =~ 19[5-9][0-9] ]]; then
+        _true
+        return
+    fi
+    _false
+    return
+}
+
+[[ $_debug == import || $_debug -gt 8 ]] && _fe str

@@ -1,0 +1,307 @@
+#!/bin/bash
+# . $_t/util/iter_complex
+$r_ _
+
+shopt -s dotglob
+export ignore_dirs=("\$RECYCLE.BIN" "System Volume Information")
+
+# verbose=true
+subdir_iter_complex() {
+    local errata=5
+    # local extra_args=""
+    local OPTIND
+    # local dir_before=""
+    # local dir_after=""
+    while getopts 'ne:f:b:a:' OPTION; do
+        case "$OPTION" in
+        n)
+            dry() {
+                [[ 1 -eq 1 ]]
+            }
+            extra_args="-n $extra_args"
+            ;;
+        e)
+            # verbose() {
+            #     [[ 1 -eq 1 ]]
+            # }
+            errata=$OPTARG
+            extra_args="-e $errata $extra_args"
+            ;;
+        f)
+            local file_fn="$OPTARG"
+            # echo "file_fn: $OPTARG"
+            ;;
+        # b)
+        #     local dir_before="$OPTARG"
+        #     # echo "dir_fn: $OPTARG"
+        #     ;;
+        # a)
+        #     local dir_after="$OPTARG"
+        #     # echo "file_fn: $OPTARG"
+        #     ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    local cur_dir="$1"
+    if [[ "$cur_dir" =~ .*RECYCLE\.BIN.* || "$cur_dir" =~ .*System\ Volume.* || "$cur_dir" =~ \.Trash.* ]]; then
+        return
+    fi
+    [[ $errata -gt 4 ]] && ec3 "subdir_iter_complex \$@: '$@'"
+
+    # Before #
+    if [[ -n "$dir_before" ]]; then
+        $dir_before "$cur_dir"
+    fi
+
+    local local_parent="$parent_dir"
+    local sub_dirs=()
+    if [[ "$cur_dir" = "$location" ]]; then
+        t_subpath=""
+    else
+        t_subpath="${cur_dir##$location\/}"
+    fi
+
+    # ec1 "for sub_path in \"$cur_dir\"/*"
+    move_dir_etc_to=""
+    for sub_path in "$cur_dir"/*; do
+        if [[ -d "$sub_path" ]]; then
+            if [[ $cur_depth -eq $max_depth ]]; then
+                echo "sub_iter stopped at max depth, path: $a_path"
+                continue
+            fi
+            dir_name="${sub_path##*\/}"
+            # check if dir_name is in skip_dir_arr
+            if [[ "$dir_name" = skip ]]; then
+                continue
+            fi
+            if [[ ${#skip_dirs_arr} -gt 0 ]]; then
+                is_in_array skip_dirs_arr "$dir_name"
+                [[ $? -eq 1 ]] && {
+                    ec1 "skipping dir: $dir_name"
+                    continue
+                }
+            fi
+            if [[ "$sub_path" =~ \' ]]; then
+                updated_sub_path=$(echo "$sub_path" | sed -e "s/[']//g")
+                mv "$sub_path" "$updated_sub_path"
+                sub_path="$updated_sub_path"
+            fi
+            # add to run dir array
+            sub_dirs+=("$sub_path")
+        ########### run file_fn #############
+        elif [[ -f "$sub_path" ]]; then
+            ((iter_count++))
+            if [[ -n $file_fn ]]; then
+                # ec1 "$file_fn $extra_args \"$sub_path\""
+                $file_fn $extra_args "$sub_path"
+            fi
+        fi
+    done
+    if [[ -n "$move_dir_etc_to" ]]; then
+        for sub_path in "$cur_dir"/*; do
+            if [[ -f "$sub_path" && "$sub_path" =~ \.srt|\.png|\.jpg|\.txt ]]; then
+                mv "$sub_path" "$move_dir_etc_to"
+            fi
+            if [[ -d "$sub_path" && "$sub_path" =~ \.[eE]xtra|[sS]ubtitle ]]; then
+                mv "$sub_path" "$move_dir_etc_to"
+            fi
+        done
+    fi
+    for sub_dir in "${sub_dirs[@]}"; do
+        parent_dir="$cur_dir"
+        grand_parent_dir="$local_parent"
+        # verbose && {
+        #     echo "subdir_iter_complex \"$sub_dir\" within parent_dir: \"$parent_dir\""
+        # }
+        if [[ -n "$dir_fn" ]]; then
+            $dir_fn $extra_args "$sub_dir"
+        fi
+        ((cur_depth++))
+        subdir_iter_complex $extra_args "$sub_dir"
+        ((cur_depth--))
+    done
+
+    # After #
+    if [[ -n "$dir_after" ]]; then
+        dir_subdir_count=0
+        for sub_path in "$cur_dir"/*; do
+            if [[ -d "$sub_path" ]]; then
+                ((dir_subdir_count++))
+            fi
+        done
+        $dir_after $extra_args "$cur_dir"
+    fi
+}
+
+max_cleaner_size=10000
+pre_clean_files() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    if [[ "$file_name" =~ ^RARBG\.txt$|Downloaded\ from\ .*\.txt$|\.DS_Store$|^\._Snapshots$|^\._Thumbnails$|^\._Videos$ ]]; then
+        echo "rm \"$file_path\""
+        rm "$file_path"
+    fi
+    if [[ "$file_name" =~ ^\._[[:digit:]]{1,4}\.jpg$ && $(stat -c%s "$file_path") -lt $max_cleaner_size ]]; then
+        echo "rm \"$file_path\""
+        rm "$file_path"
+    fi
+}
+
+# same as subdir_iter_complex but sets up file_funct/dir_funct
+# iter_complex -decec -cecec -fecec dir1 dir2
+iter_complex() {
+    local file_fn=""
+    local dir_before=""
+    local dir_after=""
+    local extra_args=""
+    # No . local skip_dirs=""
+    local errata=5
+    local OPTIND
+    # dir_fn dir_complete file_fn
+    dry() {
+        [[ 0 -eq 1 ]]
+    }
+    verbose() {
+        [[ 0 -eq 1 ]]
+    }
+    init_run() {
+        [[ 1 -eq 0 ]]
+    }
+
+    while getopts 'ne:cf:b:a:l:s:i:' OPTION; do
+        case "$OPTION" in
+        n)
+            dry() {
+                [[ 1 -eq 1 ]]
+            }
+            # extra_args="-n $extra_args"
+            ;;
+        e)
+            # verbose() {
+            #     [[ 1 -eq 1 ]]
+            # }
+            errata=$OPTARG
+            extra_args="-e $errata $extra_args"
+            ;;
+        c)
+            init_run() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        f)
+            local file_fn="$OPTARG"
+            # echo "file_fn: $OPTARG"
+            ;;
+        b)
+            local dir_before="$OPTARG"
+            # echo "dir_fn: $OPTARG"
+            ;;
+        a)
+            local dir_after="$OPTARG"
+            # echo "file_fn: $OPTARG"
+            ;;
+        l)
+            location="$OPTARG"
+            ;;
+        s)
+            skip_dirs="$OPTARG"
+            echo "skip_dirs: $skip_dirs"
+            o_IFS="$IFS"
+            IFS="|"
+            skip_dirs_arr=($skip_dirs)
+            IFS=$o_IFS
+            # for skip_dir in "${t_arr[@]}"; do
+            #     ec_err "skip_dir: $skip_dir"
+            # done
+            # IFS="$o_IFS"
+            # exit
+            # echo " ###################################"
+            # echo $skip_dirs | tr "|" "\n"
+            # echo "skip_dirs_arr: ${skip_dirs_arr[@]}"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
+    for dirname in "${skip_dirs_arr[@]}"; do
+        ec1 "skip dirname: $dirname"
+    done
+    # return
+    # echo "iter_complex arg init complete skip_dirs: $skip_dirs"
+
+    # echo "file_fn: $file_fn"
+    # echo "dir_before: $dir_before"
+    # echo "dir_after: $dir_after"
+    dirs=()
+    # first=1
+    for arg in "$@"; do
+        echo "iter_complex arg: \"$arg\""
+        if [[ ${#skip_dirs_arr} -gt 0 ]]; then
+            is_in_array skip_dirs_arr "$dir_name"
+            [[ $? -eq 1 ]] && {
+                ec1 "skipping dir: $dir_name"
+                continue
+            }
+        fi
+        if [[ -d "$arg" ]]; then
+            dirs+=("$arg")
+        else
+            ec_err "arg not a dir: '$arg'"
+        fi
+    done
+    max_depth=15
+
+    # init_run && {
+    #     shopt -s dotglob
+    #     # local temp_file_fn_name=$file_fn
+    #     # file_fn=pre_clean_files
+    #     for dir in "${dirs[@]}"; do
+    #         cur_depth=0
+    #         subdir_iter_complex -f pre_clean_files "$dir"
+    #     done
+    #     # file_fn=$temp_file_fn_name
+    #     shopt -u dotglob
+    #     echo "preclean done"
+    # }
+
+    # echo "\${#dirs[@]}: \"${#dirs[@]}\""
+    if [[ ${#dirs[@]} -eq 0 ]]; then
+        # dirs=("$(pwd)")
+        exit
+    fi
+    # local dir_name local_parent
+
+    [[ errata -gt 7 ]] && {
+        echo "Begin: iter_complex @ \"${dirs[@]}\""
+    }
+    # echo "dirs: \"${dirs[@]}\""
+    for dir in "${dirs[@]}"; do
+        local cur_dir="$dir"
+        # Before #
+        if [[ -n "$dir_before" ]]; then
+            $dir_before "$cur_dir"
+        fi
+        cur_depth=0
+        echo "subdir_iter_complex $extra_args \"$dir\""
+        subdir_iter_complex $extra_args "$dir"
+        # After #
+        if [[ -n "$dir_after" ]]; then
+            dir_subdir_count=0
+            for sub_path in "$cur_dir"/*; do
+                if [[ -d "$sub_path" ]]; then
+                    ((dir_subdir_count++))
+                fi
+            done
+            $dir_after $extra_args "$cur_dir"
+        fi
+    done
+}
