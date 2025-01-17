@@ -13,11 +13,11 @@ sld_dir="$_h/ten/sld"
 RandomOrder=0
 while getopts 'h:w:n' OPTION; do
     case "$OPTION" in
-    h)
-        height="$OPTARG"
-        ;;
     w)
         width="$OPTARG"
+        ;;
+    h)
+        height="$OPTARG"
         ;;
     ?)
         echo "bad argument! arg: $OPTION"

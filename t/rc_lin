@@ -16,10 +16,6 @@ alias h_cl="history -c; >~/.bash_history "
 alias xc="xclip -sel clip "
 alias x_ssh="cat ~/.ssh/id_ed25519.pub | xc -sel clip "
 
-alias lti="$_t/sys_lin/jog_bg "
-alias lti_="rm '$_h/ten/bg'; '$_t/sys_lin/jog_bg' "
-alias lti_log="$_t/sys_lin/jog_login "
-
 alias e_src="e_e so gedit /etc/apt/sources.list & "
 
 # clear dns cache
@@ -495,12 +491,20 @@ alt_open() {
     mount /dev/mapper/ALTROOT
 }
 
-export src_dir="/_/files/bgs"
+sld_v() {
+    sld -h 3820 -w 2160 "$@"
+}
+
+sld_h() {
+    sld -h 1600 -w 1600 "$@"
+}
+
+# export bg_dir="/_/files/bgs"
+export bg_dir="/i/s/images/bg/1600"
 check_bg_cache() {
     if [[ ! -d "$ten/bg" ]]; then
         _nd "$ten/bg"
     fi
-    bg_dir="$src_dir"
     bg_q="$ten/bg/q"
     bg_a="$ten/bg/a"
     _bg=""
@@ -524,14 +528,6 @@ check_bg_cache() {
     )
 }
 
-sld_v() {
-    sld -h 3820 -w 2160 "$@"
-}
-
-sld_h() {
-    sld -h 1600 -w 1600 "$@"
-}
-
 jog_bg() {
     if [[ $USER = root ]]; then
         echo "updating with gsettings requires active dbus for a user not root"
@@ -549,95 +545,143 @@ jog_bg() {
         ec "bg_dir: $bg_dir appears empty"
     fi
 }
+alias lti="og_bg "
+alias lti_="rm -rf '$_h/ten/bg'; jog_bg "
+
+jog_login() {
+    init_schema=0
+    # bg_dir="/s/f_l/proj/3_orig_1080_up"
+    cd "$bg_dir"
+    latest=$(ls -Art | sort -R | tail -n 1)
+    echo "latest: $latest"
+    bg="$bg_dir/$latest"
+
+    bg_loc="/usr/share/backgrounds/ubuntu-mate-jammy/current_bg.png"
+    echo "sudo cp -f \"$bg\" \"$bg_loc\""
+    sudo cp -f "$bg" "$bg_loc"
+
+    if [[ $init_schema -eq 0 ]]; then
+        return
+    fi
+}
+alias lti_log="jog_login "
 
 ############## rsync ##############
 # rsn /path1/xyz/ /path2/abc/
+# default remote sync
+# rsn -r /path1/xyz/ /path2/abc/
+# dry default remote sync with deletes
+# rsn -nrd /path1/xyz/ /path2/abc/
+# this is my backup rsyc to my backup rig ip_addresses[shear]="169.254.69.94"
+# remote sync to shear shear:/path2/abc/ (from vox:/path1/xyz/ run-on vox)
+# rsn -t shear /path1/xyz/ /path2/abc/
+# remote sync from vox (run-on shear and to shear)
+# rsn -f vox /path1/xyz/ /path2/abc/
 rsn() {
     if [[ $# -lt 2 ]]; then
-        echo "Usage: rsnn src/ dest/"
+        echo "Usage: rsn -n?r?d? ?[-f from_box] ?[-t to_box] src/ dest/"
         return
     fi
-    flag="-avu --size-only"
-    # rsync $flag "${excludes[@]}" "$@"
-    # --exclude='*sync*' "$@" | grep -E '^deleting|[^/]$'
-    echo "rsync $flag --exclude='*System\ Volume\ Information' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' "$@" | grep -E '^deleting|[^/]$'"
-    rsync $flag --exclude='*System\ Volume\ Information' --exclude="*.Trash*" --exclude="*RECYCLE\.BIN*" "$@" | grep -E '^deleting|[^/]$'
+
+    declare -A ip_addresses
+    ip_addresses[vox]="169.254.69.94"
+    ip_addresses[shear]="169.254.41.130"
+
+    echo "ip_addresses[shear]: ${ip_addresses[shear]}"
+    # return
+    from_ip=""
+    to_ip=""
+    flags="-auvz"
+    remote() {
+        [[ 0 -eq 1 ]]
+    }
+    delete() {
+        [[ 0 -eq 1 ]]
+    }
+
+    local OPTIND
+    while getopts 'nrdf:t:' OPTION; do
+        case "$OPTION" in
+        n)
+            flags="${flags}n"
+            ;;
+        r)
+            remote() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        d)
+            delete() {
+                [[ 1 -eq 1 ]]
+            }
+            ;;
+        f)
+            from_name=$OPTARG
+            if [[ -n "${ip_addresses[$OPTARG]}" ]]; then
+                from_ip="${ip_addresses[$OPTARG]}"
+            else
+                echo "no ip for $OPTARG"
+                return
+            fi
+            ;;
+        t)
+            if [[ -n "${ip_addresses[$OPTARG]}" ]]; then
+                to_ip="${ip_addresses[$OPTARG]}"
+            else
+                echo "no ip for $OPTARG"
+                return
+            fi
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    # remaining args
+    src="$1"
+    dest="$2"
+    # setup command from above
+    flags="$flags --size-only"
+    delete && {
+        flags="$flags --delete"
+    }
+    # if remote set defaults if from_ip & to_ip are unset
+    remote && [[ -z $from_ip && -z $to_ip ]] && {
+        dest="z@${ip_addresses[shear]}:$dest"
+        # echo "dest: $dest"
+    } || {
+        # echo "! default remote"
+        # for now only set src or dest ip (other is home)
+        if [[ -n $from_ip ]]; then
+            src="z@$from_ip:$src"
+        elif [[ -n $to_ip ]]; then
+            dest="z@$to_ip:$dest"
+        fi
+    }
+    # return
+    # --exclude=\"*RECYCLE.BIN*\"
+    # excludes="--exclude='*System Volume Information' --exclude='*.Trash*'"
+    echo "rsync $flags --exclude-from $_u/const/rsync_excludes \"$src\" \"$dest\""
+    # | grep -E '^deleting|[^/]$'"
+    rsync $flags --exclude-from $_u/const/rsync_excludes "$src" "$dest"
+    # | grep -E '^deleting|[^/]$'
 }
-# dry run (only show changes)
+
 rsnn() {
     if [[ $# -lt 2 ]]; then
         echo "Usage: rsnn src/ dest/"
         return
     fi
-    flag="-avun --size-only"
-    # echo "rsync $flag ${excludes[@]} \"$@\""
-    # rsync $flag "${excludes[@]}" "$@"
-    # | grep -E '^deleting|[^/]$'
-    rsync $flag --exclude='*System\ Volume\ Information' --exclude="*.Trash*" --exclude="*RECYCLE\.BIN*" --exclude='*sync*' "$@"
+    rsn -n "$@"
 }
 
-# with delete
-rsn_() {
-    if [[ $# -lt 2 ]]; then
-        echo "Usage: rsnn src/ dest/"
-        return
-    fi
-    flag="-avu --size-only --delete"
-    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
-    rsync $flag ${exclude_var[@]} "$@" | grep -E '^deleting|[^/]$'
-}
-
-# with delete dry
-rsnn_() {
-    if [[ $# -lt 2 ]]; then
-        echo "Usage: rsnn src/ dest/"
-        return
-    fi
-    flag="-avun --size-only --delete"
-    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
-    rsync $flag ${exclude_var[@]} "$@" | grep -E '^deleting|[^/]$'
-}
-
-# dry run remote sync from vox to shear
-rsnrn() {
-    if [[ $# -lt 2 ]]; then
-        echo "Usage: rsnrn src/ dest/"
-        return
-    fi
-    src="$1"
-    dest="$2"
-
-    vox="169.254.69.94"
-    shear="169.254.41.130"
-    # dest="z@$vox:$src"
-    dest="z@$shear:$src"
-
-    flag="-avun --size-only --delete"
-    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
-    echo "############### ############ ###############"
-    echo "rsync $flag ${exclude_var[@]} \"$src\" \"$dest\""
-    rsync $flag ${exclude_var[@]} "$src" "$dest"
-    echo "############### ############ ###############"
-}
-
-# remote sync from vox to shear
 rsnr() {
     if [[ $# -lt 2 ]]; then
-        echo "Usage: rsnr src/ dest/"
+        echo "Usage: rsnn src/ dest/"
         return
     fi
-    src="$1"
-    dest="$2"
-
-    vox="169.254.69.94"
-    shear="169.254.41.130"
-    # dest="z@$vox:$dest"
-    dest="z@$shear:$dest"
-
-    flag="-auv --size-only --delete"
-    exclude_var=(--exclude='*System*' --exclude='*.Trash*' --exclude='*RECYCLE\.BIN*' --exclude='*resort*' --exclude='*wip*')
-    echo "rsync $flag ${exclude_var[@]} \"$src\" \"$dest\""
-    rsync $flag ${exclude_var[@]} "$src" "$dest"
-    #| grep -E '^deleting|[^/]$'
+    rsn -r "$@"
 }
 ###################################

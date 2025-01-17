@@ -1,0 +1,63 @@
+#!/bin/bash
+# . "$_s/one_shots/specific/vlc_alter_path"
+# x_ "$_s/one_shots/specific/vlc_alter_path"
+# vlc_alter_path "i/s/0_xxx/0_cut" "media/z/xo/0_fcut"
+# vlc_alter_path -t /media/z/xo/0_fcut "s/0_xxx/0_cut" "D:/0_fcut"
+# vlc_alter_path -t /media/z/xo/0_dat_nosync /i/s/0_xxx/0_cut /media/z/xo "lin_dt_anal_z.xspf"
+
+out_base_dir=""
+while getopts 't:' OPTION; do
+    case "$OPTION" in
+    t)
+        out_base_dir="$OPTARG"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+[[ $# -lt 3 ]] && {
+    echo "Usage vlc_alter_path alter_from alter_to path1 ?path2 ..."
+    return
+}
+alter_from="$1"
+alter_to="$2"
+shift 2
+[[ -z "$out_base_dir" ]] && out_base_dir="/$alter_to"
+
+# file:///i/s to file:///C:/s
+update_xspf() {
+    file_path="$1"
+    file_dir_path="${file_path%\/*}"
+    file_name="${file_path##*\/}"
+    # skip wip && not xspf
+    [[ "$file_name" =~ ^_ || ! "$file_name" =~ .xspf$ ]] && return
+    out_target="$out_base_dir/$file_name"
+    echo "out_target: '$out_target'"
+    >"$out_target"
+    IFS=""
+    while IFS="" read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^(.*)file\:\/\/\/$alter_from\/(.*)\<\/location\>.*$ ]] && {
+            echo "${BASH_REMATCH[1]}file:///$alter_to/${BASH_REMATCH[2]}</location>" >>"$out_target"
+            continue
+        }
+        echo "$line" >>"$out_target"
+    done <"$file_path"
+}
+
+for each_arg in "$@"; do
+    if [[ -f "$each_arg" ]]; then
+        $r_ _ iter
+        echo "update_xspf \"$each_arg\""
+        update_xspf "$each_arg"
+    elif [[ -d "$each_arg" ]]; then
+        $r_ _ iter
+        iter "$each_arg" update_xspf
+    else
+        echo "unrecognized arg: '$each_arg'"
+        exit
+    fi
+done

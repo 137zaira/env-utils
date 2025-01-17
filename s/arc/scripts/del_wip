@@ -1,0 +1,305 @@
+#!/bin/bash
+# x_ "$_s/arc/del"
+# . "$_s/arc/del"
+# sets main db entries of a pair
+# run shelf_a_xxx_delete
+
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+
+$r_ _ sql iter_complex pmt file file_util
+. "$_s/arc/functions/common"
+
+### check if file @ shelf path exists in main_table
+### if exist check if in main db
+### if in main db assure path is in new location
+### if not in main db assure path is in default location
+### if dne in shelf db get sha and check
+###
+
+# shopt -s nullglob
+dry() {
+    [[ 0 -eq 1 ]]
+}
+export errata=5
+extra_args=""
+skip_dir_arr=""
+exts=()
+clean_init() {
+    [[ 1 -eq 0 ]]
+}
+
+while getopts 'hncd:t:p:l:x:e:s:' OPTION; do
+    # [[ $OPTION =~ [^nv] ]] && echo "getopts $OPTION, \$OPTARG: $OPTARG"
+    case "$OPTION" in
+    h)
+        echo "Usage:"
+        # echo "req existing_dir, pass with -e"
+        # echo "req unique_dir, pass with -u"
+        echo "set db_file or pass with -d"
+        echo "set db_table or pass with -t"
+        echo "set location or pass with -l"
+        exit
+        ;;
+    n)
+        dry() {
+            [[ 1 -eq 1 ]]
+        }
+        extra_args="-n $extra_args"
+        ;;
+    c)
+        clean_init() {
+            [[ 1 -eq 1 ]]
+        }
+        ;;
+    d)
+        db_file="$OPTARG"
+        ;;
+    t)
+        db_table="$OPTARG"
+        ;;
+    p)
+        primary_tables="$OPTARG"
+        ;;
+    x)
+        extensions="$OPTARG"
+        ;;
+    l)
+        location="$OPTARG"
+        ;;
+    e)
+        errata="$OPTARG"
+        extra_args="-e $errata $extra_args"
+        ;;
+    s)
+        skip_dirs="$OPTARG"
+        if [[ -n "$skip_dirs" ]]; then
+            extra_args="$extra_args -s $skip_dirs"
+        fi
+        # echo "skip_dirs: $skip_dirs"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+file_fn() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    [[ ! "$file_name" == *\.* ]] && return
+    ext=${file_name##*.}
+    ext0=${ext:0:1}
+    ext_=${ext:1}
+    if [[ $ext0 == m ]]; then
+        if [[ ! $m_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an m_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ $ext0 == w ]]; then
+        if [[ ! $w_exts == *$ext_* ]]; then
+            [[ $errata -gt 8 ]] && {
+                echo "not an w_ext to check ext: ${ext}"
+            }
+            ((other_file_count++))
+            # exit
+            return
+        fi
+    elif [[ ! $o_exts == *$ext* ]]; then
+        [[ $errata -gt 8 ]] && {
+            echo "not an o_exts to check ext: ${ext}"
+        }
+        ((other_file_count++))
+        return
+    fi
+    [[ $errata -gt 6 ]] && {
+        echo "file_path: $file_path"
+    }
+    ((checked_file_count++))
+    [[ $errata -gt 4 ]] && [[ $((checked_file_count % 50)) -eq 0 ]] && {
+        ec2 "checked files iterated: $checked_file_count"
+    }
+
+    if [[ $t_subpath = "" ]]; then
+        file_subpath="$file_name"
+    else
+        file_subpath="$t_subpath/$file_name"
+    fi
+    lookup_or_sha -g
+    [[ -z "$sha" || "${#sha}" -ne 64 ]] && {
+        ec_err "Unknown error lookup_or_sha, \$?: $?, sha: $sha"
+        exit
+    }
+    [[ $errata -gt 7 ]] && {
+        echo "file_subpath: $file_subpath"
+        echo "in_db: $in_db"
+        echo "at_path: $at_path"
+    }
+
+    count_in_table=$(count_q -t main -i "sha2 = '$sha'")
+    if [[ $count_in_table -gt 0 ]]; then
+        rm "$file_path"
+        ((files_deleted++))
+        if [[ $at_path -eq 1 ]]; then
+            # delete from -t = db_table
+            delete_q -i "sha2 = '$sha'"
+            return
+        fi
+        if [[ $in_db -eq 1 ]]; then
+            other_path=$(select_q -i "sha2 = '$sha'" -w "file_subpath")
+            if [[ -f "$location/$other_path" ]]; then
+                rm "$location/$other_path"
+                # double delete
+                ((files_deleted++))
+            fi
+            delete_q -i "sha2 = '$sha'"
+            return
+        fi
+    fi
+    return
+    ###################################################
+    found=""
+    for table_name in "${p_tabs[@]}"; do
+        count_in_table=$(count_q -t $table_name -i "sha2 = '$sha'")
+        error=$?
+        [[ $error -gt 0 ]] && {
+            echo "error: $error, output: $output"
+            exit $error
+        }
+        if [[ $count_in_table -gt 0 ]]; then
+            found=$table_name
+            break
+        fi
+    done
+
+    if [[ -n "$found" ]]; then
+        echo "found in $found"
+        echo "delete copy in ${db_table}@ '$file_path'"
+        echo "rm \"$file_path\""
+        rm "$file_path"
+        [[ $in_db -gt 0 ]] && {
+            echo "delete_q -i \"sha2 = '$sha'\""
+            delete_q -i "sha2 = '$sha'"
+        }
+        ((files_deleted++))
+        return
+    fi
+
+    # echo "file not in main tables: $file_subpath"
+    if [[ $in_db -eq 1 ]]; then
+        if [[ $at_path -eq 1 ]]; then
+            # echo "db_table: $db_file"
+            # echo "db_file: $db_table"
+            [[ $errata -gt 7 ]] && {
+                echo "update_q -i \"sha2 = '$sha'\" -s \"flip_bit = '1'\""
+            }
+            output=$(update_q -i "sha2 = '$sha'" -s "flip_bit = '1'")
+            error=$?
+            [[ $error -gt 0 ]] && {
+                echo "error: $error, output: $output"
+                exit $error
+            }
+            ((files_found_at_same++))
+            return
+        fi
+        other_path=$(select_q -w "file_subpath" -i "sha2 = '$sha'")
+        other_full_path="$location/$other_path"
+        error=$?
+        [[ $error -gt 0 ]] && {
+            echo "error: $error, output: $output"
+            exit $error
+        }
+        if [[ ! -f "$other_full_path" ]]; then
+            echo "update_q -i \"sha2 = '$sha'\" -s \"file_subpath = '$file_subpath', flip_bit = '1'\""
+            output=$(update_q -i "sha2 = '$sha'" -s "file_subpath = '$file_subpath', flip_bit = '1'")
+            error=$?
+            [[ $error -gt 0 ]] && {
+                echo "error: $error, output: $output"
+                exit $error
+            }
+            ((files_updated_path++))
+            return 0
+        else
+            echo "colission, existing_dir file exists"
+            echo "$sha|$file_path|$other_full_path" >>"$log_dir/col"
+            return
+        fi
+    fi
+    echo "insert_q -w \"sha2, file_subpath, flip_bit\" -v \"'$sha', '$file_subpath', '1'\""
+    output=$(insert_q -w "sha2, file_subpath, flip_bit" -v "'$sha', '$file_subpath', '1'")
+    error=$?
+    [[ $error -gt 0 ]] && {
+        echo "error: $error, output: $output"
+        exit
+    }
+    ((inserted_file_count++))
+    return 0
+}
+
+echo "p_tabs: ${p_tabs[@]}"
+read -ra extensions <<<$extensions
+m_exts=()
+w_exts=()
+o_exts=()
+for ext in ${extensions[@]}; do
+    ext=$(echo "$ext" | sed -E 's/'\''//g')
+    ext0=${ext:0:1}
+    ext_={ext:1}
+    if [[ $ext0 == m ]]; then
+        # echo "m ext: ${ext:1}"
+        m_exts+=(${ext:1})
+    elif [[ $ext0 == w ]]; then
+        # echo "w ext: ${ext:1}"
+        w_exts+=(${ext:1})
+    else
+        # echo "ext: ${ext}"
+        o_exts+=(${ext})
+    fi
+done
+export m_exts="'${m_exts[@]}'"
+export w_exts="'${w_exts[@]}'"
+export o_exts="'${o_exts[@]}'"
+echo "'main' args init complete"
+# echo "m_exts: ${m_exts}"
+# echo "w_exts: ${w_exts}"
+# echo "o_exts: ${o_exts}"
+# exit
+if [[ $as_source -eq 1 ]]; then
+    echo "main - fns/vars available at prompt::: iter_complex -f main_file_fn -b dir_before_fn -a dir_after_fn \"\$location\""
+    return
+fi
+
+echo "init_run"
+init_run
+
+clean_init && {
+    echo ": \"location_clean\" \"$location\""
+    location_clean "$location"
+    [[ $? -gt 0 ]] && {
+        echo "location_clean error: $?"
+        exit
+    }
+}
+
+echo "'main' args init complete"
+if [[ $as_source -eq 1 ]]; then
+    echo "main - fns/vars available at prompt"
+    return
+fi
+
+files_deleted=0
+ec3 "iter_complex ${extra_args} -f file_fn -b dir_before_fn -a dir_after_fn \"$location\""
+iter_complex ${extra_args} -f file_fn -b dir_before_fn -a dir_after_fn "$location"
+echo "del run on '$location' completed"
+echo "deleted_files: $deleted_files"
+# echo "$_s/arc/scripts/finally"
+$_s/arc/scripts/finally

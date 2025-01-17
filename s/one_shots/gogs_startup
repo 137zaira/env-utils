@@ -1,0 +1,2 @@
+#!/bin/bash
+/usr/bin/mate-terminal --profile gogs -e "$_b/gogs/gogs.sh"

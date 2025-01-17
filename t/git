@@ -232,10 +232,10 @@ wt_c() {
     echo "wt commit -m \"$c_message\""
     dry || wt commit -m "$c_message"
     ! local_only && ! dry && {
-        wt $push_args
+        wt push $push_args
     }
 }
-alias wt_c_="wt_c -u"
+alias wt_c_="wt_c -"
 
 wt_com() {
     echo "wt add ."

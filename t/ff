@@ -198,6 +198,17 @@ ff_add_sub() {
     # ffm "$video_path" -sub_charenc 'UTF-8' -f srt -i "$srt_path" -map 0:0 -map 0:2 -map 0:3 -map 1:0 -c:v copy -c:a copy -c:s srt "$out_path"
 }
 
+out_dir=/0xa/ffd/short
+# 1 90 deg clockwise 2 90 deg counterclockwise
+ff_rot() {
+    for file_path in "$@"; do
+        file_name="${file_path##*\/}"
+        # file_name="${file_name%\/*}"
+        # file_ext="${file_path##*\.}"
+        ffm "$file_path" -vf "transpose=1" "$out_dir/$file_name"
+    done
+}
+
 # alias ff="ffmpeg "
 # alias ff_pl="ffplay "
 # # get media info via ffmpeg's ffprobe cmd

@@ -10,3 +10,15 @@ x_ "$_t/util/welcome"
 git config --global core.autocrlf true
 
 apt install dos2unix
+
+# xdg-mime query filetype => application/xspf+xml
+# file --mime-type -b => text/xml
+local_mime=~/.local/share/applications/mimeapps.list
+touch "$local_mime"
+echo "application/xspf+xml=vlc.desktop" >>"$local_mime"
+# xdg-mime install --novendor '/usr/share/applications/vlc.desktop'
+# update-desktop-database
+# xdg-mime default application "text/xml"
+xdg-mime install --novendor /_/u/const/xspf.xml
+
+xdg-mime query default text/xspf

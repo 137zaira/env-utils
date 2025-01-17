@@ -88,5 +88,7 @@ for arg in "$@"; do
 done
 load_modules
 
-# delay splash for term open bootstrap as a subprocess
-$_t/util/welcome &
+# (disabled) delay splash for term open bootstrap as a subprocess
+# $_t/util/welcome &
+# immediate
+$_t/util/welcome

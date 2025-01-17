@@ -1,0 +1,61 @@
+#!/bin/bash
+# . "$_s/one_shots/specific/vlc_update"
+# x_ "$_s/one_shots/specific/vlc_update"
+
+# file:///i/s x file:///C:/s
+declare -A compared_xspf
+
+for_each_file() {
+    file_path="$1"
+    file_name="${file_path##*\/}"
+    # skip all wip xspf
+    [[ "$file_name" =~ ^_ || ! "$file_name" =~ .xspf$ ]] && return
+    file_dir_path="${file_path%\/*}"
+    [[ "$file_name" =~ ^lin_(.*).xspf ]] && {
+        compared_xspf["$file_path"]=1
+        win_xspf="$file_dir_path/${BASH_REMATCH[1]}.xspf"
+        echo "lin: '$file_name', \${compared_xspf[$win_xspf]}: '${compared_xspf[$win_xspf]}'"
+        return
+    }
+
+    [[ "$file_name" =~ (.*).xspf$ ]] && {
+        compared_xspf["$file_path"]=1
+        lin_xspf="$file_dir_path/lin_${BASH_REMATCH[1]}.xspf"
+        echo "win: '$file_name', \${compared_xspf[$lin_xspf]}: '${compared_xspf[$lin_xspf]}'"
+    }
+    return
+}
+# ${BASH_REMATCH[1]}"
+# return
+
+# [[ ! -f "$file_dir_path/lin_$file_name" ]] && {
+
+# }
+# if [[ "$file_name" =~ ^win_(.*)$ ]]; then
+#     out_file_path="$file_dir_path/lin_${BASH_REMATCH[1]}"
+# else
+#     out_file_path="$file_dir_path/lin_$file_name"
+# fi
+# >"$out_file_path"
+# IFS=""
+# while IFS="" read -r line || [[ -n "$line" ]]; do
+#     [[ "$line" =~ ^(.*)file\:\/\/\/i\/s\/(.*)\<\/location\>.*$ ]] && {
+#         echo "${BASH_REMATCH[1]}file:///C:/s/${BASH_REMATCH[2]}</location>" >>"$out_file_path"
+#         continue
+#     }
+#     echo "$line" >>"$out_file_path"
+# done <"$file_path"
+
+[[ $# -lt 1 ]] && {
+    echo "Usage vlc_update path1 ?path2 ..."
+    exit
+}
+
+for each_arg in "$@"; do
+    if [[ -d "$each_arg" ]]; then
+        $r_ _ iter
+        iter "$each_arg" for_each_file
+    else
+        for_each_file "$each_arg"
+    fi
+done

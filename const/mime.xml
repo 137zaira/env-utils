@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+    <mime-type type="application/[something]+xml">
+        <comment>xspf file type</comment>
+        <glob pattern="*.[an_ext]"/>
+    </mime-type>
+</mime-info>

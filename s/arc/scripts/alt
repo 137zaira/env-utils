@@ -31,7 +31,10 @@ dry() {
 export errata=7
 extra_args=""
 skip_dir_arr=""
-while getopts 'nve:l:f:t:s:' OPTION; do
+clean_init() {
+    [[ 0 -eq 1 ]]
+}
+while getopts 'nve:cl:f:t:s:' OPTION; do
     case "$OPTION" in
     n)
         dry() {
@@ -49,6 +52,11 @@ while getopts 'nve:l:f:t:s:' OPTION; do
     s)
         skip_dirs="$OPTARG"
         extra_args="$extra_args -s $skip_dirs"
+        ;;
+    c)
+        clean_init() {
+            [[ 1 -eq 1 ]]
+        }
         ;;
     l)
         location="$OPTARG"
@@ -244,14 +252,14 @@ echo "init_run"
 init_run
 
 # first time running on location remove quotes from filenames
-# clean_init && {
-#     echo ": \"location_clean\" \"$location\""
-#     location_clean "$location"
-#     [[ $? -gt 0 ]] && {
-#         echo "location_clean error: $?"
-#         exit
-#     }
-# }
+clean_init && {
+    echo ": \"location_clean\" \"$location\""
+    location_clean "$location"
+    [[ $? -gt 0 ]] && {
+        echo "location_clean error: $?"
+        exit
+    }
+}
 
 ############# go #############
 ec3 "iter_complex ${extra_args} -f alt_file_fn -b dir_before_fn -a dir_after_fn -l \"$location\" -- \"$@\""

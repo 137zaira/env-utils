@@ -93,7 +93,9 @@ while getopts 'ne:cf:l:s:a:u:' OPTION; do
 done
 shift "$(($OPTIND - 1))"
 
-add_to_unify_table() {
+# the 'main' table is basically a union of all the tables main sets
+# used to delete scrapped drives run before  cleanup to delete all copies
+upsert_main_table() {
     if [[ -z "$unify_table" ]]; then
         return
     fi
@@ -113,8 +115,16 @@ add_to_unify_table() {
         echo "select_q error: $error, $in_table"
         exit
     }
-    if [[ ! $in_table = $table ]]; then
+    if [[ ! $in_table = $db_table ]]; then
+        echo -e "updating unified table:\nupdate_q -t $unify_table -s \"table_name = '$db_table', flip_bit = '1'\" -i \"sha2 = '$sha'\""
         output=$(update_q -t $unify_table -s "table_name = '$db_table', flip_bit = '1'" -i "sha2 = '$sha'")
+        error=$?
+        [[ $error -ne 0 ]] && {
+            echo "insert_q error: $error, $output"
+            exit
+        }
+    else
+        output=$(update_q -t $unify_table -s "flip_bit = '1'" -i "sha2 = '$sha'")
         error=$?
         [[ $error -ne 0 ]] && {
             echo "insert_q error: $error, $output"
@@ -181,32 +191,34 @@ main_file_fn() {
         echo "in_db: $in_db"
         echo "at_path: $at_path"
     }
-    found=""
-    for table_name in "${p_tabs[@]}"; do
-        count_in_table=$(count_q -t $table_name -i "sha2 = '$sha'")
-        error=$?
-        [[ $error -gt 0 ]] && {
-            echo "error: $error, output: $output"
-            exit $error
-        }
-        if [[ $count_in_table -gt 0 ]]; then
-            found=$table_name
-            break
-        fi
-    done
 
-    if [[ -n "$found" ]]; then
-        echo "found in $found"
-        echo "delete copy in ${db_table}@ '$file_path'"
-        echo "rm \"$file_path\""
-        rm "$file_path"
-        [[ $in_db -gt 0 ]] && {
-            echo "delete_q -i \"sha2 = '$sha'\""
-            delete_q -i "sha2 = '$sha'"
-        }
-        ((files_deleted++))
-        return
-    fi
+    # wip
+    # found=""
+    # for table_name in "${p_tabs[@]}"; do
+    #     count_in_table=$(count_q -t $table_name -i "sha2 = '$sha'")
+    #     error=$?
+    #     [[ $error -gt 0 ]] && {
+    #         echo "error: $error, output: $output"
+    #         exit $error
+    #     }
+    #     if [[ $count_in_table -gt 0 ]]; then
+    #         found=$table_name
+    #         break
+    #     fi
+    # done
+
+    # if [[ -n "$found" ]]; then
+    #     echo "found in $found"
+    #     echo "delete copy in ${db_table}@ '$file_path'"
+    #     echo "rm \"$file_path\""
+    #     rm "$file_path"
+    #     [[ $in_db -gt 0 ]] && {
+    #         echo "delete_q -i \"sha2 = '$sha'\""
+    #         delete_q -i "sha2 = '$sha'"
+    #     }
+    #     ((files_deleted++))
+    #     return
+    # fi
 
     if [[ $at_path -eq 1 ]]; then
         output=$(update_q $extra_args -s "flip_bit = '1'" -i "file_subpath = '$file_subpath'")
@@ -216,7 +228,7 @@ main_file_fn() {
             exit
         }
         ((files_found_at_same++))
-        add_to_unify_table
+        upsert_main_table
         return
     fi
     # ####### no db entry for sha, insert ########
@@ -232,7 +244,7 @@ main_file_fn() {
             exit
         }
         ((inserted_file_count++))
-        add_to_unify_table
+        upsert_main_table
         return
     fi
 
@@ -275,7 +287,7 @@ exiting"
         exit
     }
     ((files_updated_path++))
-    add_to_unify_table
+    upsert_main_table
 }
 
 if [[ -n "$primary_tables" ]]; then

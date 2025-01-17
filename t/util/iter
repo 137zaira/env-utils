@@ -2,6 +2,8 @@
 
 $r_ _ sys
 
+default_max_depth="9"
+
 verbose() {
     [[ 0 -eq 1 ]]
 }
@@ -24,10 +26,10 @@ subdir_iter() {
             return
         fi
         if [[ -d "$sub_path" ]]; then
-            if [[ $cur_depth -le $max_depth ]]; then
+            if [[ $cur_depth -lt $max_depth ]]; then
                 sub_dirs+=("$sub_path")
             else
-                echo "sub_iter stopped at max depth, sub_path: $sub_path"
+                echo "sub_iter stopped at max depth, sub_path: '$sub_path' skipped"
             fi
         elif [[ -f "$sub_path" ]]; then
             ((iter_count++))
@@ -55,6 +57,23 @@ subdir_iter() {
 }
 
 iter() {
+    max_depth=$default_max_depth
+    cur_depth=1
+
+    local OPTIND
+    while getopts 'd:' OPTION; do
+        case "$OPTION" in
+        d)
+            max_depth="$OPTARG"
+            ;;
+        ?)
+            echo "bad argument! arg: $OPTION"
+            exit 1
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+
     shopt -s dotglob
     if [[ $# -lt 1 ]]; then
         echo "Usage: iter ?base_dir function_name "
@@ -98,8 +117,6 @@ iter() {
     # else
     #     t_subpath="${cur_dir##$location\/}"
     # fi
-    max_depth=8
-    cur_depth=0
     for a_path in "$cur_dir"/*; do
         if [[ -d "$a_path" ]]; then
             sub_dirs+=("$a_path")

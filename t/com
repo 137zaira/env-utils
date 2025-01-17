@@ -50,6 +50,12 @@ e_e() {
 # sudo print echo command or on windows just print echo
 if [[ -d /c/Windows ]]; then
     export vsc_conf="$_h/AppData/Roaming/VSCodium/User"
+    # bypass
+    e_e_() {
+        e_e "$@"
+    }
+else
+    export vsc_conf="$_h/AppData/Roaming/VSCodium/User"
     e_e_() {
         if [[ $# -lt 1 ]]; then
             echo "e_e_ echo's params then sudo eval/executes them, $no_param"
@@ -58,13 +64,13 @@ if [[ -d /c/Windows ]]; then
         ec "\$: sudo $@"
         sudo "$@"
     }
-else
-    export vsc_conf="$_h/AppData/Roaming/VSCodium/User"
-    # bypass
-    e_e_() {
-        e_e "$@"
-    }
 fi
+
+print_args() {
+    for arg in "$@"; do
+        echo "print_args: '$arg'"
+    done
+}
 
 # these are my quick access WIP scripts at root of repo (create and ignore locally)
 alias re_="$_u/re_ "
@@ -203,7 +209,7 @@ path_to_lin() {
     [[ "$working_path" =~ ^C:/(.*)$ ]] && {
         working_path="/c/${BASH_REMATCH[1]}"
     }
-    printf "$working_path" | clip
+    # printf "$working_path" | clip
     echo "$working_path"
 }
 alias ptl="path_to_lin "

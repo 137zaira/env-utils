@@ -1,0 +1,114 @@
+#!/bin/bash
+# x_ "$_s/arc/nuke"
+# . "$_s/arc/nuke"
+# sets main db entries of a pair
+
+if [ "$0" = "$BASH_SOURCE" ]; then
+    as_source=0
+else
+    as_source=1
+fi
+
+# sql iter_complex file_util
+$r_ _ pmt iter sql
+# shopt -s nullglob
+
+# count_q -t nuke
+# exit
+dry() {
+    [[ 0 -eq 1 ]]
+}
+
+export errata=5
+extra_args=""
+skip_dir_arr=""
+# for pre-deletion
+alt_db_tables=()
+run_alt=0
+nuke_table=""
+while getopts 'hf:t:' OPTION; do
+    # [[ $OPTION =~ [^nv] ]] && echo "getopts $OPTION, \$OPTARG: $OPTARG"
+    case "$OPTION" in
+    h)
+        echo "Usage:"
+        echo "set db_file or pass with -f"
+        echo "set db_table or pass with -t"
+        echo "set location or pass with -l"
+        exit
+        ;;
+    f)
+        db_file="$OPTARG"
+        ;;
+    t)
+        db_table="$OPTARG"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+if [[ -z "$db_table" ]]; then
+    echo "USAGE nuke -t table_name, or set \$db_table"
+    exit
+fi
+if [[ -z "$db_file" ]]; then
+    echo "USAGE nuke -f db_file, or set \$db_file"
+    exit
+fi
+
+dirs="$1"
+
+check_init_db_table -s || {
+    echo "check_init_db_table failed"
+    return
+}
+
+nuke_file() {
+    file_path="$1"
+    # if is_video "$file_path"; then
+    echo "si \"$file_path\""
+    sha2=$(si "$file_path")
+    count_for_sha=$(count_q -i "sha2 = '$sha2'")
+    error=$?
+    if [[ $error -ne 0 ]]; then
+        echo "count_for_sha error: $error, $count_for_sha"
+        exit
+    fi
+    if [[ $count_for_sha -eq 0 ]]; then
+        echo "insert_q -w \"sha2\" -v \"'$sha2'\""
+        output=$(insert_q -w "sha2" -v "'$sha2'")
+        error=$?
+        if [[ $error -ne 0 ]]; then
+            echo "insert_q error: $error, $output"
+            exit
+        fi
+    else
+        echo "count_for_sha: $count_for_sha"
+    fi
+    rm "$file_path"
+}
+
+main() {
+    for arg in "$@"; do
+        if [[ -d "$1" ]]; then
+            iter "$arg" nuke_file
+            return
+        fi
+        echo "not dir skipping: '$1'"
+    done
+}
+
+if [[ $# -eq 0 ]]; then
+    yes_or_no "no args, nuke current path?" && {
+        iter "$(pwd)" nuke_file
+    } || {
+        echo "exiting"
+        exit
+    }
+fi
+
+echo "nuke_table: $db_table"
+main "$@"

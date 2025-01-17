@@ -1,0 +1,46 @@
+#!/bin/bash
+# . "$_s/one_shots/specific/vlc_to_win"
+# x_ "$_s/one_shots/specific/vlc_to_win"
+
+[[ $# -lt 1 ]] && {
+    echo "Usage vlc_to_win path1 ?path2 ..."
+    return
+}
+
+# file:///i/s to file:///C:/s
+for_each_file() {
+    file_path="$1"
+    file_dir_path="${file_path%\/*}"
+    file_name="${file_path##*\/}"
+    # skip wip && not xspf
+    [[ "$file_name" =~ ^_ || ! "$file_name" =~ .xspf$ ]] && return
+
+    if [[ "$file_name" =~ ^lin_(.*).xspf$ ]]; then
+        # if [[ "$file_name" =~ ^win_(.*)$ ]]; then
+        win_file_path="$file_dir_path/${BASH_REMATCH[1]}.xspf"
+        if [[ -f "$win_file_path" ]]; then
+            echo "win_file_path: '$win_file_path' exists, skipping '$file_path'"
+            return
+        fi
+
+        IFS=""
+        while IFS="" read -r line || [[ -n "$line" ]]; do
+            [[ "$line" =~ ^(.*)file\:\/\/\/i\/s\/(.*)\<\/location\>.*$ ]] && {
+                echo "${BASH_REMATCH[1]}file:///C:/s/${BASH_REMATCH[2]}</location>" >>"$win_file_path"
+                continue
+            }
+            echo "$line" >>"$win_file_path"
+        done <"$file_path"
+    else
+        echo "skipping: '$file_name', not a lin_ xspf"
+    fi
+}
+
+for each_arg in "$@"; do
+    if [[ -d "$each_arg" ]]; then
+        $r_ _ iter
+        iter "$each_arg" for_each_file
+    else
+        for_each_file "$each_arg"
+    fi
+done

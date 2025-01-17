@@ -1,0 +1,8 @@
+run             - sets up vars for a main/alt/shelf run, runs if not sourced
+
+main          --- scan and insert/update
+alt           --- scan and move to location set by main
+shelf         --- moves all files not in main to ${location}_new and inserts/updates shelf db location
+
+nuke_wip      --- delete all recursively after adding sha to nuke table
+del_wip       --- remove all in single dir by sha from db, no delete

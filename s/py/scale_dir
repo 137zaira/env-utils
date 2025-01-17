@@ -1,0 +1,42 @@
+#!/bin/bash
+# x_ $_s/py/scale_dir
+. "$_b/envs/sd/bin/activate"
+
+py_scaler="/_/u/s/py/scale.py"
+# max_width=2160
+# max_height=3840
+max_width=3840
+max_height=1600
+max_height=3200
+
+while getopts 'x:y:' OPTION; do
+    case "$OPTION" in
+    x)
+        max_width=$OPTARG
+        ;;
+    y)
+        max_height=$OPTARG
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+[[ "$#" -gt 0 ]] && {
+    src_dir="$1"
+} || {
+    # src_dir="/i/s/images/orig_uph"
+    src_dir="/i/s/images/orig_upv"
+    src_dir=/i/s/images/orig_up1_stage2/2x_redo_orig
+}
+
+stage_dir="${src_dir}_stage"
+[[ ! -d "$stage_dir/2x" ]] && mkdir -p "$stage_dir/2x"
+[[ ! -d "$stage_dir/4x" ]] && mkdir -p "$stage_dir/4x"
+[[ ! -d "$stage_dir/no_upscale" ]] && mkdir -p "$stage_dir/no_upscale"
+
+for each_path in "$src_dir"/*; do
+    python "$py_scaler" -x $max_width -y $max_height -o $stage_dir -f "$each_path"
+done
