@@ -236,7 +236,7 @@ wt_c() {
         wt push $push_args
     }
 }
-alias wt_c_="wt_c -"
+alias wt_c_="wt_c -u"
 
 wt_com() {
     echo "wt add ."
