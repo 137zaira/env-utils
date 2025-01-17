@@ -232,6 +232,7 @@ wt_c() {
     echo "wt commit -m \"$c_message\""
     dry || wt commit -m "$c_message"
     ! local_only && ! dry && {
+        echo "wt push $push_args"
         wt push $push_args
     }
 }
