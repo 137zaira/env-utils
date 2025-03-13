@@ -2,6 +2,10 @@ re_
 re__
 re___
 
+# wip code and local env scripting
 local
 s/arc/run
+s/l/iptables
+s/one_shots/specific/sld
+
 # .gitignore

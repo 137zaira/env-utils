@@ -4,12 +4,18 @@ array_wrapper() {
         echo "$thing"
     done
 }
+
 file_wrapper() {
     file_fpath="$1"
+    file_dpath="${file_fpath%\/*}"
+    file_fname="${file_fpath##*\/}"
+    file_ext="${file_fname##*\.}"
+    file_name="${file_fname%\.*}"
     while read -r line || [[ -n "$line" ]]; do
         echo "line: $line"
     done <"$file_fpath"
 }
+
 var_wrapper() {
     var="$1"
     while IFS= read -r line; do

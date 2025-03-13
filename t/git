@@ -46,8 +46,20 @@ alias wtd="git diff -b --ignore-cr-at-eol "
 alias wt_01_pd="wt config pull.ff only; wt pull 01 master "
 alias wt_01_fe="wt fetch 01 master "
 alias wt_01_f="wt fetch 01 ; "
-alias wt_m="wt merge "
-alias wt_ms="wt merge --squash "
+wt_m() {
+    local OPTIND o
+    while getopts 's' opt; do
+        case "$opt" in
+        s)
+            merge_args="--squash"
+            ;;
+        esac
+    done
+    shift "$(($OPTIND - 1))"
+    echo "wt merge $merge_args \"$@\""
+    wt merge $merge_args "$@"
+}
+alias wt_ms="wt_m -s "
 alias wt_res="git reset --hard HEAD "
 # flush cache
 alias wt_fsh="git rm --cached -r . "
@@ -236,6 +248,7 @@ wt_c() {
         wt push $push_args
     }
 }
+# push to new remote branch
 alias wt_c_="wt_c -u"
 
 wt_com() {

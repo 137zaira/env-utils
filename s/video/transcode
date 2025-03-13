@@ -1,0 +1,132 @@
+#!/bin/bash
+# x_ "$_u/s/video/transcode"
+
+# this re_encodes video to play on a ps5
+# eac3 => ac3 audio
+# bt701/bt2020 => bt601
+
+run_transcode() {
+    [[ 1 == 0 ]]
+}
+has_subs() {
+    [[ 1 == 0 ]]
+}
+out_dir=""
+# qual=25
+qual=""
+a=0
+s=0
+
+default_postfix=_tc
+prefix=""
+postfix=""
+
+while getopts 'q:d:a:s:p:z:' OPTION; do
+    case "$OPTION" in
+    q)
+        qual="${OPTARG}"
+        ;;
+    d)
+        out_dir="${OPTARG}"
+        ;;
+
+    a)
+        a=${OPTARG}
+        ;;
+    s)
+        has_subs() {
+            [[ 1 == 1 ]]
+        }
+        s=${OPTARG}
+        ;;
+    p)
+        prefix="${OPTARG}"
+        ;;
+    z)
+        postfix="${OPTARG}"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+video_path="$1"
+if [[ -z "$video_path" ]]; then
+    echo "missing video input arg"
+    exit
+fi
+
+if [[ -z "$prefix" && -z "$postfix" ]]; then
+    postfix="$default_postfix"
+fi
+
+# _ means no change in filename
+if [[ "$postfix" = _ && -n "$out_dir" ]]; then
+    postfix=""
+fi
+
+cs=$(ffprobe -select_streams v:0 -show_entries stream=color_space -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+if [[ $cs = unknown ]]; then
+    video="-c:v copy"
+else
+    cp=$(ffprobe -select_streams v:0 -show_entries stream=color_primaries -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+    if [[ -n "$qual" ]]; then
+        video="-vf colormatrix=$cp:bt601 -colorspace 2 -color_primaries 2 -color_trc 2 -b:v ${qual}M"
+    else
+        vbr=$(ffprobe -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+        video="-vf colormatrix=$cp:bt601 -colorspace 2 -color_primaries 2 -color_trc 2 -b:v ${vbr}"
+    fi
+
+    run_transcode() {
+        [[ 1 == 1 ]]
+    }
+fi
+
+ac=$(ffprobe -select_streams a:$a -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+if [[ $ac = eac3 ]]; then
+    abr=$(ffprobe -select_streams a:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+    asr=$(ffprobe -select_streams a:0 -show_entries stream=sample_rate -of default=noprint_wrappers=1:nokey=1 "$video_path" 0>/dev/null 2>/dev/null)
+    audio="-c:a ac3 -b:a $abr -ar $asr"
+    run_transcode() {
+        [[ 1 == 1 ]]
+    }
+else
+    audio="-c:a copy"
+fi
+
+transcode() {
+    video_path="$1"
+    video_dir="${video_path%\/*}"
+    video_name="${video_path##*\/}"
+    ext="${video_name##*\.}"
+    video_name="${video_name%\.*}"
+    out_fname="$prefix$video_name${postfix}.$ext"
+    if [[ -n "$out_dir" ]]; then
+        out_path="$out_dir/$out_fname"
+        [[ ! -d "$out_dir" ]] && mkdir -p "$out_dir"
+    else
+        out_path="$video_dir/$out_fname"
+    fi
+    echo "video_name: '$video_name'"
+    if [[ ! -f "$out_path" ]]; then
+        if has_subs; then
+            map="-map 0:v -map 0:a:$a -map 0:s:$s"
+            echo "ffmpeg -y -i \"$video_path\" $map $video $audio -c:s copy \"$video_name\""
+            ffmpeg -y -i "$video_path" $map $video $audio -c:s copy "$out_path"
+        else
+            map="-map 0:v -map 0:a:$a"
+            echo "ffmpeg -y -i \"$video_path\" $map $video $audio \"$out_path\""
+            ffmpeg -y -i "$video_path" $map $video $audio "$out_path"
+        fi
+        # ffmpeg -i "$video_path" -map 0 -c:v copy $audio -c:s copy "$out_path"
+    else
+        echo "skipping existing transcode path: './$video_name'"
+    fi
+}
+
+run_transcode && transcode "$video_path" || {
+    echo "no transcode needed for: '$video_path'"
+}

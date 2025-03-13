@@ -1,0 +1,111 @@
+#!/bin/bash
+# x_ $_s/py/segment_crop
+. "$_b/envs/sd/bin/activate"
+
+if [[ $# -lt 1 || ! -f "$1" ]]; then
+    echo "Usage: re_ video_file_path"
+    exit
+fi
+
+video_file_path="$1"
+dir_path="${video_file_path%\/*}"
+video_full_file_name="${video_file_path##*\/}"
+video_file_name="${video_full_file_name%\.*}"
+image_folder="$dir_path/$video_file_name"
+pre_segmented="$image_folder/0_png"
+
+[[ ! -d "$pre_segmented" ]] && mkdir -p "$pre_segmented"
+cd "$pre_segmented"
+# to_png "$video_file_path"()
+
+cropped_folders=()
+seg=1
+cut_q="cut which sides? :"
+seg_q="to what image number? [[:digit]]*/_: "
+set_sides() {
+    options=("l" "r" "t" "b" "_")
+    def="_"
+    cut_sides=""
+    while true; do
+        echo -e "\ncut_sides: $cut_sides"
+        # i=0
+        # for choice in "${options[@]}"; do
+        #     [[ $(($i % 2)) -eq 0 ]] && {
+        #         ec_opt "$choice"
+        #     } || {
+        #         ec_opt_alt "$choice"
+        #     }
+        #     ((i++))
+        # done
+        # #
+        read -n1 -p "$cut_q (l/r/t/b/[_]): " input_opt </dev/tty
+        input_opt=${input_opt:-$def}
+        # echo -e "\ninput: $input_opt"
+        case $input_opt in
+        [l])
+            [[ ! $cut_sides =~ l ]] && cut_sides="${cut_sides}l"
+            continue
+            ;;
+        [r])
+            [[ ! $cut_sides =~ r ]] && cut_sides="${cut_sides}r"
+            continue
+            ;;
+        [t])
+            [[ ! $cut_sides =~ t ]] && cut_sides="${cut_sides}t"
+            continue
+            ;;
+        [b])
+            [[ ! $cut_sides =~ b ]] && cut_sides="${cut_sides}b"
+            continue
+            ;;
+        [_])
+            break
+            ;;
+        *)
+            echo -e "\ninvalid option"
+            ;;
+        esac
+    done
+    echo ""
+}
+
+segment() {
+    seg_dir="$image_folder/${i}_$cut_sides"
+    mkdir "$seg_dir"
+    for file_name in *; do
+        if [[ "$file_name" =~ ^[0]*([1-9]+[[:digit:]]*)\.png$ ]]; then
+            image_num="${BASH_REMATCH[1]}"
+            if [[ $image_num -le max_image_num ]]; then
+                mv "$file_name" "$seg_dir/$file_name"
+            fi
+        fi
+    done
+    echo "\"$_s/py/crop_dir\" -d "$seg_dir" -o \"$image_folder/cropped\" -$cut_sides"
+    "$_s/py/crop_dir" -d "$seg_dir" -o "$image_folder/cropped" -$cut_sides
+}
+
+segment_all() {
+    # run till _
+    while true; do
+        while true; do
+            i=1
+            set_sides
+            read -p "$seg_q" max_image_number_in </dev/tty
+            if [[ "$max_image_number_in" =~ ^_$ ]]; then
+                echo -e "running crop on all remaining"
+                max_image_num=999999
+                segment
+                ((i++))
+                return
+            fi
+            if [[ ! "$max_image_number_in" =~ ^[[:digit:]]*$ ]]; then
+                echo -e "\nnumerical input only"
+                continue
+            fi
+            max_image_num=$max_image_number_in
+            segment
+            ((i++))
+        done
+    done
+}
+segment_all

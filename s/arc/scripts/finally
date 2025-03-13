@@ -12,11 +12,13 @@ fi
 $r_ _ sql pmt
 
 stats() {
-    ec1 "checked_file_count:            $checked_file_count"
-    ec2 "other_file_count:              $other_file_count"
-    ec1 "files_found_at_same path:      $files_found_at_same"
-    ec2 "files w/updated_path:          $files_updated_path"
-    ec1 "inserted_file_count:           $inserted_file_count"
+    ec1 "checked_file_count      : $checked_file_count"
+    ec2 "other_file_count        : $other_file_count"
+    ec1 "files_found_at_same path: $files_found_at_same"
+    ec2 "files w/updated_path    : $files_updated_path"
+    ec1 "inserted_file_count     : $inserted_file_count"
+    ec2 "deleted_files           : $deleted_files"
+    ec2 "nuked_files             : $nuked_files"
 
     [[ $arc_fn = "del" ]] && ec2 "files_deleted:                 $files_deleted"
     ec1 "dir_count:   $dir_count"

@@ -25,6 +25,9 @@ $r_ _ sql iter_complex file file_util
 dry() {
     [[ 0 -eq 1 ]]
 }
+clean_init() {
+    [[ 0 -eq 1 ]]
+}
 export errata=5
 extra_args=""
 skip_dir_arr=""
@@ -47,7 +50,9 @@ while getopts 'hncf:t:e:s:' OPTION; do
         extra_args="-n $extra_args"
         ;;
     c)
-        extra_args="-c $extra_args"
+        clean_init() {
+            [[ 1 -eq 1 ]]
+        }
         ;;
     f)
         db_file="$OPTARG"
@@ -87,7 +92,13 @@ new_file_fn() {
     file_path="$1"
     file_name="${file_path##*\/}"
     [[ ! "$file_name" == *\.* ]] && return
-    ext=${file_name##*.}
+    ext_mc=${file_name##*.}
+    ext=$(echo $ext_mc | tr '[:upper:]' '[:lower:]')
+    [[ ! $ext = $ext_mc ]] && {
+        new_file_path="${file_path%\.*}.$ext"
+        mv "$file_path" "${new_file_path}"
+        file_path="$new_file_path"
+    }
     ext0=${ext:0:1}
     ext_=${ext:1}
     if [[ $ext0 == m ]]; then
@@ -388,6 +399,31 @@ in_storage_file_fn() {
 
 echo init_run
 init_run
+
+# first time running on location remove quotes from filenames
+clean_init && {
+    echo ": \"location_clean\" \"$location\""
+    location_clean "$location"
+    [[ $? -gt 0 ]] && {
+        echo "location_clean error: $?"
+        exit
+    }
+}
+
+if [[ -d "$location/nuke" ]]; then
+    for file_path in "$location/nuke"/*; do
+        [[ -f "$file_path" ]] && {
+            nuke_file "$file_path"
+        }
+    done
+fi
+if [[ -d "$location/resort/nuke" ]]; then
+    for file_path in "$location/resort/nuke"/*; do
+        [[ -f "$file_path" ]] && {
+            nuke_file "$file_path"
+        }
+    done
+fi
 
 read -ra extensions <<<$extensions
 m_exts=()

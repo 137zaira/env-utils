@@ -13,16 +13,5 @@
 [Environment]::SetEnvironmentVariable('ten', "/C/Users/zaira/ten", [System.EnvironmentVariableTarget]::Machine)
 
 Write-Output "after opening new terminal recheck:"
-Write-Output ("r_: '" + [Environment]::GetEnvironmentVariable('r_') + "'")
-Write-Output ("user: '" + [Environment]::GetEnvironmentVariable('user') + "'")
-Write-Output ("_b: '" + [Environment]::GetEnvironmentVariable('_b') + "'")
-Write-Output ("_u: '" + [Environment]::GetEnvironmentVariable('_u') + "'")
-Write-Output ("_t: '" + [Environment]::GetEnvironmentVariable('_t') + "'")
-Write-Output ("_s: '" + [Environment]::GetEnvironmentVariable('_s') + "'")
-Write-Output ("_set: '" + [Environment]::GetEnvironmentVariable('_set') + "'")
-Write-Output ("sys: '" + [Environment]::GetEnvironmentVariable('sys') + "'")
-Write-Output ("_d: '" + [Environment]::GetEnvironmentVariable('_d') + "'")
-Write-Output ("_h: '" + [Environment]::GetEnvironmentVariable('_h') + "'")
-Write-Output ("ten: '" + [Environment]::GetEnvironmentVariable('ten') + "'")
-
+Write-Output ("C:/_/u/set/ch_env.ps1")
 exit

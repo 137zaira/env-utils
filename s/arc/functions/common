@@ -43,7 +43,8 @@ clear_logs_and_set_vars() {
     export files_found_at_same=0
     export files_updated_path=0
     export inserted_file_count=0
-    export files_deleted=0
+    export deleted_files_=0
+    export nuked_files_=0
 }
 
 init_run() {
@@ -368,3 +369,29 @@ location_clean() {
     echo "etc_file_removal_count: $etc_file_removal_count"
 }
 ############### </location_clean> ################
+
+nuke_file() {
+    file_path="$1"
+    sha2=$(si "$file_path")
+    count_in_nuke=$(count_q -t nuke -i "sha2 = '$sha2'")
+    if [[ $count_in_nuke -eq 0 ]]; then
+        echo "insert_q -t nuke -w \"sha2\" -v \"'$sha2'\""
+        output=$(insert_q -t nuke -w "sha2" -v "'$sha2'")
+        error=$?
+        if [[ $error -ne 0 ]]; then
+            echo "insert_q error: $error, $output"
+            exit
+        fi
+    fi
+    count_in_main=$(count_q -i "sha2 = '$sha2'")
+    if [[ $count_in_main -eq 0 ]]; then
+        echo "delete_q -i \"sha2 = '$sha2'\""
+        output=$(delete_q -i "sha2 = '$sha2'")
+        error=$?
+        if [[ $error -ne 0 ]]; then
+            echo "delete_q error: $error, $output"
+            exit
+        fi
+    fi
+    rm "$file_path"
+}

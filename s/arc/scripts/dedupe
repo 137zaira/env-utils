@@ -1,6 +1,6 @@
 #!/bin/bash
-# . "$_s/arc/alt"
-# x_ "$_s/arc/alt"
+# . "$_s/arc/scripts/dedupe"
+# x_ "$_s/arc/scripts/dedupe"
 if [ "$0" = "$BASH_SOURCE" ]; then
     as_source=0
 else
@@ -90,20 +90,19 @@ move_to_deleted() {
 }
 
 ##################### <alt_file_fn> #########################
-alt_file_fn() {
+dedupe_file_fn() {
     file_path="$1"
     file_name="${file_path##*\/}"
     # echo "file_path: $file_path"
     [[ ! "$file_name" == *\.* ]] && return
     ext_mc=${file_name##*.}
     ext=$(echo $ext_mc | tr '[:upper:]' '[:lower:]')
-    if [[ ! $ext = $ext_mc ]]; then
+    [[ ! $ext = $ext_mc ]] && {
         new_file_path="${file_path%\.*}.$ext"
-        # 2 moves required to only change the case 
         mv "$file_path" "${new_file_path}_"
         mv "${new_file_path}_" "${new_file_path}"
         file_path="$new_file_path"
-    fi
+    }
     ext0=${ext:0:1}
     ext_=${ext:1}
     if [[ $ext0 == m ]]; then
@@ -338,8 +337,8 @@ if [[ -d "$location/resort/nuke" ]]; then
 fi
 
 ############# go #############
-ec3 "iter_complex ${extra_args} -f alt_file_fn -b dir_before_fn -a dir_after_fn -l \"$location\" -- \"$@\""
-iter_complex ${extra_args} -f alt_file_fn -b dir_before_fn -a dir_after_fn -l "$location" -- "$@"
+ec3 "iter_complex ${extra_args} -f dedupe_file_fn -b dir_before_fn -a dir_after_fn -l \"$location\" -- \"$@\""
+iter_complex ${extra_args} -f dedupe_file_fn -b dir_before_fn -a dir_after_fn -l "$location" -- "$@"
 
 ########### finish ###########
 # move any media not in db to "$location/resort/deleted"
