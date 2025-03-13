@@ -20,12 +20,9 @@ $r_ _ sql iter_complex pmt
 #echo "support code loaded"
 
 ###############################################
-if [[ $# -eq 0 ]]; then
-    export run_type=a_film
-    # export run_type=alt_film
-    # export run_type=shelf_film
-fi
-
+export run_default=a_film
+# export run_type=alt_film
+# export run_type=shelf_film
 ###############################################
 export open_data="/_/files/dat"
 export open_db_path="$open_data/video.db"
@@ -80,7 +77,7 @@ set_vars() {
         export db_table="film"
         # WIP union table
         export unify_table="main"
-        export skip_dirs="resort"
+        export skip_dirs="resort|rifed_frames|src_frames"
     }
 
     # sorts files into existing_dir/unique_dir if in main_db_table
@@ -134,5 +131,5 @@ if [[ $# -gt 0 ]]; then
         run_loop "$arg"
     done
 else
-    echo "Usage: run [film/alt_film/shelf_film/...] [film/alt_film/shelf_film/...]"
+    run_loop $run_default
 fi

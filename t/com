@@ -72,6 +72,8 @@ print_args() {
     done
 }
 
+alias cl="clear "
+
 # these are my quick access WIP scripts at root of repo (create and ignore locally)
 alias re_="$_u/re_ "
 alias re__="$_u/re__ "

@@ -116,7 +116,7 @@ upsert_main_table() {
         exit
     }
     if [[ ! $in_table = $db_table ]]; then
-        echo -e "updating unified table:\nupdate_q -t $unify_table -s \"table_name = '$db_table', flip_bit = '1'\" -i \"sha2 = '$sha'\""
+        echo -e "updating unified table name:\nupdate_q -t $unify_table -s \"table_name = '$db_table', flip_bit = '1'\" -i \"sha2 = '$sha'\""
         output=$(update_q -t $unify_table -s "table_name = '$db_table', flip_bit = '1'" -i "sha2 = '$sha'")
         error=$?
         [[ $error -ne 0 ]] && {
@@ -139,7 +139,14 @@ main_file_fn() {
     # echo "file_path: $file_path"
     file_name="${file_path##*\/}"
     [[ ! "$file_name" == *\.* ]] && return
-    ext=${file_name##*.}
+    ext_mc=${file_name##*.}
+    ext=$(echo $ext_mc | tr '[:upper:]' '[:lower:]')
+    [[ ! $ext = $ext_mc ]] && {
+        new_file_path="${file_path%\.*}.$ext"
+        mv "$file_path" "${new_file_path}_"
+        mv "${new_file_path}_" "${new_file_path}"
+        file_path="$new_file_path"
+    }
     ext0=${ext:0:1}
     ext_=${ext:1}
     if [[ $ext0 == m ]]; then
@@ -181,6 +188,7 @@ main_file_fn() {
     else
         file_subpath="$t_subpath/$file_name"
     fi
+
     # echo "lookup_or_sha -g @'$file_subpath'"
     lookup_or_sha -g
     [[ -z "$sha" || "${#sha}" -ne 64 ]] && {
@@ -206,19 +214,6 @@ main_file_fn() {
     #         break
     #     fi
     # done
-
-    # if [[ -n "$found" ]]; then
-    #     echo "found in $found"
-    #     echo "delete copy in ${db_table}@ '$file_path'"
-    #     echo "rm \"$file_path\""
-    #     rm "$file_path"
-    #     [[ $in_db -gt 0 ]] && {
-    #         echo "delete_q -i \"sha2 = '$sha'\""
-    #         delete_q -i "sha2 = '$sha'"
-    #     }
-    #     ((files_deleted++))
-    #     return
-    # fi
 
     if [[ $at_path -eq 1 ]]; then
         output=$(update_q $extra_args -s "flip_bit = '1'" -i "file_subpath = '$file_subpath'")
@@ -268,8 +263,15 @@ exiting"
         echo "found other_path in_db: $other_path"
     }
     # file found at db entry, add to col logfile #
-
     if [[ -f "$location/$other_path" ]]; then
+        other_path_ext=${other_path##*.}
+        other_ext_low=$(echo $other_path_ext | tr '[:upper:]' '[:lower:]')
+        # if we need to update the name in db as ext changed above
+        [[ ! $other_ext_low = $other_path_ext && "${other_path%\.*}" = "${file_subpath%\.*}" ]] && {
+            echo "fixing ext case in db for file_subpath: '$file_subpath'"
+            update_q -i "sha2 = '$sha'" -s "file_subpath = '$file_subpath'"
+            return
+        }
         # [[ $errata -gt 7 ]] &&
         echo "collision (2 files same location)"
         echo "$sha2|$location/$other_path|$file_path" >>"$log_dir/col"
@@ -339,6 +341,21 @@ clean_init && {
         exit
     }
 }
+
+if [[ -d "$location/nuke" ]]; then
+    for file_path in "$location/nuke"/*; do
+        [[ -f "$file_path" ]] && {
+            nuke_file "$file_path"
+        }
+    done
+fi
+if [[ -d "$location/resort/nuke" ]]; then
+    for file_path in "$location/resort/nuke"/*; do
+        [[ -f "$file_path" ]] && {
+            nuke_file "$file_path"
+        }
+    done
+fi
 
 ############# go #############
 if [[ $# -gt 0 ]]; then

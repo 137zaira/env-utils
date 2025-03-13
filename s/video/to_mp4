@@ -1,0 +1,202 @@
+#!/bin/bash
+# x_ /_/u/s/video/to_mp4
+$r_ _ pmt
+
+# to_mp4 -p slow -q 150 -a '/i/s/orig_video.mp4'
+# exit
+
+bypass=0
+# bypass=1
+rife=1
+gif=0
+
+format=jpg
+format=png
+unset x265 startNumber
+# fps="29.97"
+fps="60"
+fps="40"
+
+qual="150"
+qual="90"
+
+x265=1
+encoder="libx265"
+tune="-tune fastdecode"
+audio_source=""
+audio_channel=""
+
+for arg in "$@"; do
+    if [[ $arg = _ ]]; then
+        bypass=1
+        shift
+    elif [[ $arg = n ]]; then
+        rife=0
+    fi
+done
+
+bypass() {
+    [[ $bypass -eq 1 ]]
+}
+rife_frames() {
+    [[ $rife -eq 1 ]]
+}
+
+# slow medium fast ultrafast
+# slow   522 788 624 1250 seconds
+# medium 203 311 246 494 seconds
+# fast   081 117 096 185 seconds
+# slow   171 256 200 291 MB
+# medium 173 257 200 393 MB
+# fast   173 257 201 394 MB
+preset=slow
+preset=medium
+preset=fast
+preset=ultrafast
+
+while getopts 'yra:c:f:gq:p:i:' OPTION; do
+    case "$OPTION" in
+    y)
+        bypass() {
+            [[ 1 -eq 1 ]]
+        }
+        ;;
+    r)
+        rife_frames() {
+            [[ 1 -eq 1 ]]
+        }
+        ;;
+    a)
+        audio_source="${OPTARG}"
+        [[ -z "$audio_channel" ]] && {
+            audio_channel=1
+        }
+        ;;
+    c)
+        audio_channel="${OPTARG}"
+        ;;
+    f)
+        fps="${OPTARG}"
+        ;;
+    g)
+        gif=1
+        ;;
+    q)
+        qual="${OPTARG}"
+        ;;
+    p)
+        preset="${OPTARG}"
+        ;;
+    i)
+        format="${OPTARG}"
+        ;;
+    ?)
+        echo "bad argument! arg: $OPTION"
+        exit
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+if [[ $# -lt 1 ]]; then
+    base_dir="$(pwd)"
+else
+    base_dir="$1"
+fi
+
+source_dir="$base_dir/src_frames"
+# webp_dir="$base_dir/webp_frames"
+rifed_dir="$base_dir/rifed_frames"
+rifed_dir_o="$base_dir/rifed_frames_o"
+
+echo "base_dir: $base_dir"
+cd "$base_dir"
+
+parent_dir="${base_dir%\/*}"
+# grandparent_dir="${parent_dir%\/*}"
+# out_name="${base_dir##*\/}"
+# out_name="${parent_dir##*\/}"
+# out_name="${grandparent_dir##*\/}"
+
+out_name="${parent_dir##*\/}_${base_dir##*\/}"
+
+echo "parent_dir: $parent_dir"
+echo "out_name: $out_name"
+# cd "$out_dir"
+out_path="$parent_dir/${out_name}.mp4"
+echo "out_path: $out_path"
+out_path="$parent_dir/$out_name.mp4"
+
+# image_dox="%05d-0000.jpg"
+# image_dox="%05d.jpg"
+# image_dox="%05d.$format"
+image_dox="%06d.$format"
+image_dox="%08d.$format"
+
+bypass || {
+    yes_or_no "[( out: $out_path )]?" || exit
+}
+[[ -f "$out_path" ]] && rm "$out_path"
+
+if [[ ! -d "$source_dir" ]]; then
+    echo "no src_frames dir found at \$(pwd): $source_dir"
+    bypass || yes_or_no "shift from base?" && {
+        ec "mkdir \"$source_dir\""
+        mkdir "$source_dir"
+        ec "mv ./*.$format ./$source_dir"
+        for file in *.$format; do
+            if [[ $file =~ [[:digit:]]{5}\-([[:digit:]]{4}).$format ]]; then
+                mv "$file" "$source_dir/${BASH_REMATCH[1]}.$format"
+                continue
+            fi
+            mv "$file" "$source_dir"
+        done
+    } || exit
+fi
+
+rife_frames && [[ ! -d "$rifed_dir" ]] && {
+    mkdir "$rifed_dir"
+    echo "rife-ncnn-vulkan -i \"$source_dir/\" -o \"$rifed_dir/\" -f $format"
+    rife-ncnn-vulkan -i "$source_dir/" -o "$rifed_dir/" -f $format
+}
+
+[[ -d "$rifed_dir" ]] && {
+    source_dir="$rifed_dir"
+}
+
+image_dox="$source_dir/$image_dox"
+i=0
+args="-y -framerate $fps -i $image_dox"
+if [[ -n "$audio_source" ]]; then
+    args="$args -i $audio_source -c:v $encoder -c:a copy -map 0:0 -map 1:$audio_channel -b:v ${qual}M -preset $preset"
+else
+    args="$args -c:v $encoder -b:v ${qual}M -preset $preset"
+fi
+[[ -n "$startNumber" ]] && {
+    args="-start_number $startNumber $args"
+}
+[[ -n "$x265" ]] && {
+    args="$args $tune"
+}
+# args="$args -start_number 02654"
+pass_1="-pass 1 -an -f mp4 /dev/null"
+pass_2="-pass 2 $out_path"
+start=$(date +%s)
+if [[ $gif -eq 1 ]]; then
+    [[ ! -d "$parent_dir/gif" ]] && mkdir "$parent_dir/gif"
+    #$fps -framerate 40
+    ffmpeg -i $image_dox -vf "fps=70,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" "$parent_dir/gif/$out_name.gif"
+else
+    echo "ffmpeg $args $pass_1"
+    ffmpeg $args $pass_1
+    echo "ffmpeg $args $pass_2"
+    ffmpeg $args $pass_2
+fi
+end=$(date +%s)
+echo '###########################'
+echo 'encoded in '$(echo "$end - $start" | bc -l) seconds
+echo '###########################'
+
+[[ -f "$base_dir/ffmpeg2pass-0.log" ]] && {
+    rm "$base_dir/ffmpeg2pass-0.log"
+}

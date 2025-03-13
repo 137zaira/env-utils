@@ -1,0 +1,16 @@
+#!/bin/bash
+# $_s/video/to_png
+input_path="$1"
+# ""
+if [[ ! -f "$input_path" ]]; then
+    echo "USAGE $: to_png input_path"
+    exit
+fi
+
+# TODO remove vsync?
+# 0-10 sec -ss 0 -to 10
+ffmpeg -i "$input_path" -vsync 0 %06d.png
+
+exit
+
+# 60.5 min = 3630

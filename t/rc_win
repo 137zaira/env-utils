@@ -5,15 +5,19 @@
 # $r_ _
 . $_t/com
 
-eval $(ssh-agent)
-ssh-add /c/Users/zaira/.ssh/git_ed25519
-
 # alias python3="python3.11 "
 # alias python="python3 "
 # alias py="winpty -Xallow-non-tty python3.11.exe "
 # alias pip3="python -m pip3.11 "
 # alias pip="python -m pip3.11 "
 # alias wpy="py "
+
+rl() {
+    cd /c/_/web/api
+    npm start &
+    sleep 1
+    /C/Users/zaira/AppData/Local/Chromium/Application/chrome.exe file:///C:/_/web/search.html
+}
 
 # /C/_/cl/next/outputs/control
 tuc() {

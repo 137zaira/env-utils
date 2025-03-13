@@ -1,0 +1,65 @@
+#!/bin/bash
+# x_ $_s/py/crop_dir
+. "$_b/envs/sd/bin/activate"
+
+# 960x4 = 3840
+# 545x4 = 2180
+max_width=545
+max_height=960
+image_dir=""
+args=""
+output_dir=""
+
+while getopts 'd:o:x:y:tblr' OPTION; do
+    case "$OPTION" in
+    d)
+        image_dir="$OPTARG"
+        ;;
+    o)
+        output_dir="$OPTARG"
+        ;;
+    x)
+        max_width="$OPTARG"
+        ;;
+    y)
+        max_height="$OPTARG"
+        ;;
+    t)
+        args="$arg -t"
+        ;;
+    b)
+        args="$arg -t"
+        ;;
+    l)
+        args="$arg -l"
+        ;;
+    r)
+        args="$arg -r"
+        ;;
+
+    ?)
+
+        echo "bad argument! arg: $OPTION"
+        exit 1
+        ;;
+    esac
+done
+shift "$(($OPTIND - 1))"
+
+if [[ -z "$image_dir" ]]; then
+    echo "Usage: $_s/py/crop_dir -d [image_dir] -t? -b? -l? -r?"
+    exit
+fi
+
+# cd /i/s/0_xxx/new_unsorted/short/tumblr_skh4r4kZJ51apbx1r/0_top
+cd "$image_dir"
+image_dir_name="${image_dir##*\/}"
+image_dir_path="${image_dir%\/*}"
+image_dir_parent="${image_dir_path%\/*}"
+
+[[ -z "$output_dir" ]] && output_dir="$image_dir_parent/${image_dir_name}_cropped"
+for image in *.png; do
+    echo "python \"/_/u/s/py/crop.py\" $args -o "$output_dir" -f \"$image\""
+    python "/_/u/s/py/crop.py" $args -o "$output_dir" -f "$image"
+done
+exit

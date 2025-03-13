@@ -130,9 +130,12 @@ convert_dir_to_lin() {
 
 modified_to_lf() {
     cd "$1"
-    local status=$(git status)
+    local status=$(git status --porcelain)
     while read -r line || [[ -n "$line" ]]; do
-        if [[ "$line" =~ modified\:[[:space:]]+([^\ ]*)$ ]]; then
+        if [[ "$line" =~ ^[[:space:]]*M[[:space:]]+([^\ ]*)$ ]]; then
+            echo "dos2unix \"$_u/${BASH_REMATCH[1]}\""
+            dos2unix "$_u/${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[\?]*[[:space:]]+([^\ ]*)$ ]]; then
             echo "dos2unix \"$_u/${BASH_REMATCH[1]}\""
             dos2unix "$_u/${BASH_REMATCH[1]}"
         fi
@@ -143,8 +146,15 @@ ply() {
     cd "$_u"
     if [[ -n "$(git status --porcelain)" ]]; then
         echo "$(git status --porcelain)"
-        echo "commit '$_u' before ply"
-        return
+        # echo "commit '$_u' before ply"
+        # return
+        git add .
+        git commit -m pre_ply
+        if [[ -n "$(git status --porcelain)" ]]; then
+            echo "$(git status --porcelain)"
+            echo "commit '$_u' before ply, quick commit failed"
+            return
+        fi
     fi
     for path in "$u_proxy_dir"/*; do
         [[ -d "$path" ]] && {
@@ -677,11 +687,25 @@ rsnn() {
     rsn -n "$@"
 }
 
+rsn_() {
+    rsn -d "$@"
+}
+rsnn_() {
+    rsn -dn "$@"
+}
+
 rsnr() {
     if [[ $# -lt 2 ]]; then
         echo "Usage: rsnn src/ dest/"
         return
     fi
     rsn -r "$@"
+}
+rsnr_() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: rsnn src/ dest/"
+        return
+    fi
+    rsn -dr "$@"
 }
 ###################################

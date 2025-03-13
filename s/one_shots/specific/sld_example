@@ -36,9 +36,6 @@ dir_add() {
     fi
     echo "dir_add: f:$dir_path"
     dir_paths+=("$dir_path")
-    if [[ "$dir_paths" =~ .*0xp.* ]]; then
-        sld_dir="/media/z/nn/9_dat/ten"
-    fi
     for fpath in $dir_path/*; do
         if [[ -d "$fpath" ]]; then
             dir_add "$fpath"

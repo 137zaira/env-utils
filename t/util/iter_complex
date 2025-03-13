@@ -74,12 +74,9 @@ subdir_iter_complex() {
                 echo "sub_iter stopped at max depth, path: $a_path"
                 continue
             fi
-            dir_name="${sub_path##*\/}"
             # check if dir_name is in skip_dir_arr
-            if [[ "$dir_name" = skip ]]; then
-                continue
-            fi
             if [[ ${#skip_dirs_arr} -gt 0 ]]; then
+                dir_name="${sub_path##*\/}"
                 is_in_array skip_dirs_arr "$dir_name"
                 [[ $? -eq 1 ]] && {
                     ec1 "skipping dir: $dir_name"
@@ -161,6 +158,12 @@ iter_complex() {
     local extra_args=""
     # No . local skip_dirs=""
     local errata=5
+    [[ -n "$skip_dirs" ]] && {
+        o_IFS="$IFS"
+        IFS="|"
+        skip_dirs_arr=($skip_dirs)
+        IFS=$o_IFS
+    }
     local OPTIND
     # dir_fn dir_complete file_fn
     dry() {
@@ -246,6 +249,7 @@ iter_complex() {
     for arg in "$@"; do
         echo "iter_complex arg: \"$arg\""
         if [[ ${#skip_dirs_arr} -gt 0 ]]; then
+            dir_name="${arg##*\/}"
             is_in_array skip_dirs_arr "$dir_name"
             [[ $? -eq 1 ]] && {
                 ec1 "skipping dir: $dir_name"

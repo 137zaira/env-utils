@@ -18,6 +18,12 @@ path() {
     fi
 }
 
+#
+# ac=$(ffprobe -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 /c/a/1_tv/Severence/S2/Severance.S02E03.2160p.ENG.ITA.H265-TheBlackKing.mkv 0>/dev/null 2>/dev/null)
+# ffprobe -select_streams a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1
+# -show_entries stream=
+# stream= -of default=noprint_wrappers=1
+
 ffm() {
     t_path=$(path "$1")
     shift
@@ -59,41 +65,36 @@ ffp_r() {
 }
 
 ffp_w() {
-    for a_path in "$@"; do
-        # ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 "$@"
-        output=$(ffp "$a_path" -v error -select_streams v -show_entries stream=width -of default=noprint_wrappers=1:nokey=1)
-        # width="${output##*=}"
-        echo "$output"
-    done
+    ffp "$a_path" -v error -select_streams v -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
 }
 ffp_h() {
-    for a_path in "$@"; do
-        fname="${a_path##\/}"
-        # ffprobe -v error -show_entries stream=width,height -of default=noprint_wrappers=1 "$@"
-        output=$(ffp "$a_path" -v error -select_streams v -show_entries stream=height -of default=noprint_wrappers=1:nokey=1)
-        # height="${output##*=}"
-        echo "$output"
-    done
+    ffp "$a_path" -v error -select_streams v -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
+}
+
+ffp_ac() {
+    if [[ $# -gt 1 ]]; then
+        a=$2
+    else
+        a=0
+    fi
+    ffprobe -select_streams a:$a -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
+}
+
+ffp_cs() {
+    ffprobe -select_streams v:0 -v error -show_entries "stream=color_space" -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
+}
+
+ffp_cn() {
+    ffprobe -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
 }
 
 #  : format=duration : format_tags : stream_tags
 ffp_bd() {
-    for a_path in "$@"; do
-        audio=$(ffp "$a_path" -select_streams a:0 -v error -show_streams -show_entries "stream=bits_per_raw_sample" -of default=noprint_wrappers=1)
-        while IFS= read -r line; do
-            # echo "line: $line"
-            [[ "$line" =~ bits_per_raw_sample\=(.*)$ ]] && {
-                echo "${BASH_REMATCH[1]}"
-                break
-            }
-        done <<<"$audio"
-    done
+    ffp "$a_path" -select_streams a:0 -v error -show_entries "stream=bits_per_raw_sample" -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
 }
 
 ffp_fmt() {
-    for a_path in "$@"; do
-        ffp "$a_path" -v quiet -show_entries stream=sample_fmt -select_streams a:0 -of default=noprint_wrappers=1:nokey=1
-    done
+    ffp "$a_path" -v quiet -show_entries stream=sample_fmt -select_streams a:0 -of default=noprint_wrappers=1:nokey=1 "$1" 0>/dev/null 2>/dev/null
 }
 
 # ffp_fps() {
@@ -199,7 +200,8 @@ ff_add_sub() {
 }
 
 out_dir=/0xa/ffd/short
-# 1 90 deg clockwise 2 90 deg counterclockwise
+# 1 90 deg clockwise
+# 2 90 deg counterclockwise
 ff_rot() {
     for file_path in "$@"; do
         file_name="${file_path##*\/}"
@@ -207,6 +209,30 @@ ff_rot() {
         # file_ext="${file_path##*\.}"
         ffm "$file_path" -vf "transpose=1" "$out_dir/$file_name"
     done
+}
+
+ff_con() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: ff_concat name segment_count"
+        return
+    fi
+    name="$1"
+    name_txt="${name}.txt"
+    >"${name_txt}"
+    name_video="${name}.mp4"
+    shift
+    for a_path in "$@"; do
+        echo "file '$a_path'" >>"$name_txt"
+    done
+    echo "############################################################"
+    echo "ffmpeg -f concat -safe 0 -i $name_txt -c copy '$name_video'"
+    echo "############################################################"
+    ffmpeg -f concat -safe 0 -i $name_txt -c copy "$name_video"
+    echo "############################################################"
+    echo "rm \"${name_txt}\""
+    rm "${name_txt}"
+    echo "############################################################"
+    # mv $name.mp4 ../
 }
 
 # alias ff="ffmpeg "
@@ -340,32 +366,6 @@ ff_rot() {
 # 5e494d088545e483c7d836a4e3a6694b
 # #EXT-X-KEY:METHOD=AES-128,URI="C://fast//jav.guru////encryption.key"
 # ffmpeg -protocol_whitelist file,http,https,tcp,tls,crypto -allowed_extensions ALL -i m.m3u8 _decrypted.mp4
-# ff_concat() {
-#     for a_path in "$@"; do
-#         t_path=$(path "$a_path")
-#         name=$1
-#         segments=$2
-#         parent_dir="$3"
-#         if [[ $# -lt 2 ]]; then
-#             echo "Usage: ff_concat name segment_count"
-#             return
-#         fi
-#         name_txt=${name}.txt
-#         cd "$parent_dir/$name"
-#         # file_path="C:\Users\zaira\Desktop\not_sync\\$name"
-#         >"${name_txt}"
-#         i=1
-#         # echo "${file_path}.txt"
-#         while [[ $i -le $segments ]]; do
-#             echo "file '$i.mp4'" | tee -a "${name_txt}" >/dev/null
-#             ((i++))
-#         done
-#         echo "ffmpeg -f concat -i $name_txt -c copy $name.mp4"
-#         ffmpeg -f concat -i $name_txt -c copy $name.mp4
-#         mv $name.mp4 ../
-#         cd ..
-#     done
-# }
 
 # ff_01_a() {
 #     for a_path in "$@"; do

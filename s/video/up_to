@@ -1,0 +1,26 @@
+#!/bin/bash
+# x_ /_/u/s/video/up_to
+# removes leading next-sdif hash and removes previous rife dir
+
+if [[ $# -lt 1 ]]; then
+    base_dir="$(pwd)"
+else
+    base_dir="$1"
+fi
+
+cd "$base_dir/src_frames"
+# mkdir ../stage1
+for file_name in *; do
+    if [[ "$file_name" =~ ^[[:digit:]]{5}\-([[:digit:]]{6}\.png) ]]; then
+        # to_path="../stage1/${BASH_REMATCH[1]}"
+        # echo "file_name: '$file_name' => '$to_path'"
+        # mv "$file_name" "to_path"
+        mv "$file_name" "${BASH_REMATCH[1]}"
+    fi
+done
+
+# to_mp4 "../stage"
+[[ -d "$base_dir/rifed_frames" ]] && {
+    rm -r "$base_dir/rifed_frames"
+}
+to_mp4 "$base_dir"
